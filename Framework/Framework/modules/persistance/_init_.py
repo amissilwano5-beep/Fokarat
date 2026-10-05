@@ -1,0 +1,1 @@
+from .wmi_persist import WMIPersistence

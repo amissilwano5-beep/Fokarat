@@ -1,0 +1,38 @@
+these_framework/
+├── core/
+│   ├── __init__.py
+│   ├── events.py
+│   ├── module_interface.py
+│   ├── config.py
+│   └── logger.py
+├── modules/
+│   ├── __init__.py
+│   ├── payload_generators/
+│   │   ├── __init__.py
+│   │   ├── python_gen.py
+│   │   └── cpp_gen.py
+│   ├── obfuscators/
+│   │   ├── __init__.py
+│   │   ├── speck_cipher.py
+│   │   └── sandbox_detector.py
+│   ├── injectors/
+│   │   ├── __init__.py
+│   │   └── badusb_gen.py
+│   ├── listeners/
+│   │   ├── __init__.py
+│   │   └── listener_manager.py
+│   └── persistence/
+│       ├── __init__.py
+│       └── wmi_persist.py
+├── ai/
+│   ├── __init__.py
+│   └── polymorph_llm.py
+├── mobile/
+│   ├── __init__.py
+│   ├── android_gen.py
+│   └── ios_gen.py
+├── gui.py
+├── main.py
+├── config.yaml
+├── requirements.txt
+└── README.md

@@ -1,0 +1,1 @@
+from .badusb_gen import BadUSBGenerator

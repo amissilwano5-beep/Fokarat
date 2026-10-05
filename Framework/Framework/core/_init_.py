@@ -1,0 +1,1 @@
+# Fichier vide, sert à indiquer que core est un package

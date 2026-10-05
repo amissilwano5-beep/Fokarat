@@ -1,0 +1,8 @@
+pyzmq
+pyyaml
+psutil
+customtkinter
+Pillow
+
+# Optionnel: pour les fonctionnalités IA avancées seulement
+# llama-cpp-python

