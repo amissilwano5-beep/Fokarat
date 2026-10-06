@@ -1,0 +1,7 @@
+pyyaml
+pyzmq
+psutil
+customtkinter
+Pillow
+pyinstaller
+requests

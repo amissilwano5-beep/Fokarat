@@ -1,0 +1,28 @@
+# ============================================
+# FOKARAT - Configuration
+# ============================================
+# Modifiez ces valeurs selon votre environnement.
+# LHOST = votre adresse IP (celle de votre machine Kali)
+# LPORT = le port d'écoute de votre choix (entre 1024 et 65535)
+
+lhost: "192.168.1.100"
+lport: 4444
+http_server_port: 8080
+
+# Dossier de sortie des fichiers générés
+output_dir: "output"
+
+# Mode réseau par défaut
+network_mode: "tcp"
+
+# Configuration Android
+android_keystore: "my.keystore"
+android_apk_input: ""
+
+# Modèle IA local (optionnel)
+llm_model_path: "models/mistral-7b.gguf"
+
+# Options
+stealth_mode: false
+persistence_method: "wmi"
+usb_method: "ducky"
