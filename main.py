@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-FOKARAT v3.0 - Framework de cybersécurité
-Interface animée + modules d'évasion antivirus
+FOKARAT v3.1 - Framework de cybersécurité
+Interface animée + Éthique + Scope + Audit
 Auteur: Lwano Amissi Blanchard (FOKAS)
 """
 import os
 import sys
 import time
+import json
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -15,6 +16,8 @@ from core.config import Config
 from core.logger import Logger
 from core.utils import which
 from core.database import Database
+from core.scope import ScopeValidator
+from core.ethics import EthicsController
 
 # ─── MODULES PAYLOADS ────────────────────────────
 from modules.payload_generators.python_gen import PythonPayloadGenerator
@@ -54,6 +57,8 @@ config = Config()
 listener = ListenerManager()
 http_server = HTTPServer()
 db = Database()
+scope_validator = ScopeValidator()
+ethics = EthicsController()
 
 
 # ══════════════════════════════════════════════════
@@ -85,7 +90,7 @@ BANNER = f"""{C.GRN}{C.B}
    ██║     ╚██████╔╝██║  ██╗██║  ██║██║  ██║██║  ██║   ██║
    ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   {C.R}
 {C.CYN}{C.B}              Building the future, one tool at a time.{C.R}
-{C.YEL}                    FOKARAT Framework v3.0{C.R}
+{C.YEL}                    FOKARAT Framework v3.1{C.R}
 """
 
 
@@ -96,9 +101,11 @@ BOOT_SEQUENCE = [
     ("[BOOT 04] Chargement des modules Android...", 0.10),
     ("[BOOT 05] Chargement des modules d'évasion...", 0.10),
     ("[BOOT 06] Initialisation de la base de données...", 0.10),
-    ("[BOOT 07] Chargement de l'assistant IA...", 0.10),
-    ("[BOOT 08] Vérification des dépendances...", 0.15),
-    ("[BOOT 09] Système prêt pour la session.", 0.25),
+    ("[BOOT 07] Chargement du contrôleur éthique...", 0.10),
+    ("[BOOT 08] Validation du scope en cours...", 0.10),
+    ("[BOOT 09] Chargement de l'assistant IA...", 0.10),
+    ("[BOOT 10] Vérification des dépendances...", 0.15),
+    ("[BOOT 11] Système prêt pour la session.", 0.25),
 ]
 
 
@@ -180,9 +187,15 @@ def show_menu():
     lport = config.get("lport")
     out = config.get("output_dir", "output")
 
+    # Statut scope et dry-run
+    scope_status = f"{C.GRN}✓ actif{C.R}" if scope_validator.active_scope else f"{C.RED}✗ inactif{C.R}"
+    dry_run_status = f"{C.YEL}ON{C.R}" if ethics.dry_run else f"{C.D}OFF{C.R}"
+
     print(f"  {C.MAG}◆{C.R} LHOST : {C.CYN}{lhost}{C.R}       "
           f"{C.MAG}◆{C.R} LPORT : {C.CYN}{lport}{C.R}       "
           f"{C.MAG}◆{C.R} Output : {C.CYN}{out}{C.R}")
+    print(f"  {C.MAG}◆{C.R} Scope : {scope_status}       "
+          f"{C.MAG}◆{C.R} DRY-RUN : {dry_run_status}")
     print()
 
     print(separator("═", 62, C.CYN))
@@ -227,6 +240,14 @@ def show_menu():
     print(menu_option("23", "Multi-encodage MSFVenom"))
     print(menu_option("24", "Ajouter protection Anti-VM"))
     print(menu_option("25", "Ajouter protection Anti-Debug"))
+
+    print(separator("─", 62, C.BLU))
+
+    # ─── ÉTHIQUE & LÉGAL ───────────────────────
+    print(f"  {C.B}{C.RED}▶ ÉTHIQUE & LÉGAL{C.R}")
+    print(menu_option("30", "Déclarer un scope (autorisation obligatoire)"))
+    print(menu_option("31", "Activer / Désactiver le mode DRY-RUN"))
+    print(menu_option("32", "Voir le journal d'audit"))
 
     print(separator("─", 62, C.BLU))
 
@@ -310,6 +331,7 @@ def handle_padding():
         f.write(wrapped)
     logger.success(f"Payload protégé : {out}")
     db.log_payload("padding_cpp", "-", 0, out, "success")
+    ethics.audit("PADDING_APPLIED", out)
 
 
 def handle_python_obfuscation():
@@ -325,6 +347,7 @@ def handle_python_obfuscation():
         f.write(obs)
     logger.success(f"Payload obfusqué : {out}")
     db.log_payload("obfuscated_python", "-", 0, out, "success")
+    ethics.audit("PYTHON_OBFUSCATED", out)
 
 
 def handle_upx():
@@ -335,6 +358,7 @@ def handle_upx():
     packer = UPXPacker()
     result = packer.pack(path, ultra=True)
     db.log_payload("upx_packed", "-", 0, result, "success")
+    ethics.audit("UPX_PACKED", result)
 
 
 def handle_multi_encoder():
@@ -367,6 +391,7 @@ def handle_multi_encoder():
     )
     if result:
         db.log_payload("multi_encoded", lhost, lport, result, "success")
+        ethics.audit("MULTI_ENCODED", result)
 
 
 def handle_anti_vm():
@@ -381,6 +406,7 @@ def handle_anti_vm():
     with open(out, "w", encoding="utf-8") as f:
         f.write(wrapped)
     logger.success(f"Protection Anti-VM ajoutée : {out}")
+    ethics.audit("ANTI_VM_APPLIED", out)
 
 
 def handle_anti_debug():
@@ -395,6 +421,7 @@ def handle_anti_debug():
     with open(out, "w", encoding="utf-8") as f:
         f.write(wrapped)
     logger.success(f"Protection Anti-Debug ajoutée : {out}")
+    ethics.audit("ANTI_DEBUG_APPLIED", out)
 
 
 def handle_report():
@@ -405,11 +432,13 @@ def handle_report():
             print(f.read())
     except Exception as e:
         logger.error(f"Lecture impossible : {e}")
+    ethics.audit("REPORT_GENERATED", path)
 
 
 def handle_web_api():
     logger.info("Démarrage de l'API Web sur le port 5000...")
     logger.info("Ouvrez : http://localhost:5000/docs")
+    ethics.audit("WEB_API_STARTED", "port 5000")
     try:
         from web.api import start_web
         start_web()
@@ -419,11 +448,80 @@ def handle_web_api():
 
 
 # ══════════════════════════════════════════════════
+#  GESTIONNAIRES ÉTHIQUE & LÉGAL
+# ══════════════════════════════════════════════════
+def handle_scope():
+    clear()
+    print(f"\n  {C.B}{C.CYN}═══ DÉCLARATION DE SCOPE ═══{C.R}\n")
+
+    # Vérifier si un scope est déjà actif
+    existing = scope_validator.load_scope()
+    if existing:
+        print(f"  {C.YEL}Scope actif :{C.R}")
+        print(f"    Cible      : {C.CYN}{existing['target']}{C.R}")
+        print(f"    Autorisation : {C.CYN}{existing['auth_ref']}{C.R}")
+        print(f"    Expire le  : {C.CYN}{existing['expires_at'][:19]}{C.R}\n")
+
+        choice = input(f"  {C.YEL}Remplacer ? (o/n) [n] :{C.R} ").strip().lower()
+        if choice != "o":
+            return
+
+    scope_validator.require_scope()
+
+
+def handle_dry_run():
+    if ethics.dry_run:
+        ethics.disable_dry_run()
+        logger.info("Mode DRY-RUN désactivé : les actions seront réelles.")
+    else:
+        ethics.enable_dry_run()
+        logger.warning("Mode DRY-RUN activé : les actions seront simulées.")
+
+
+def handle_audit_log():
+    clear()
+    print(f"\n  {C.B}{C.CYN}═══ JOURNAL D'AUDIT ═══{C.R}\n")
+
+    audit_file = "output/audit.log"
+    if not os.path.exists(audit_file):
+        logger.info("Aucun log d'audit pour le moment.")
+        return
+
+    try:
+        with open(audit_file, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        print(f"  {C.D}{len(lines)} entrée(s) au total{C.R}\n")
+        print(f"  {'Timestamp':<22} {'Action':<22} {'Détails':<30}")
+        print(f"  {'-' * 22} {'-' * 22} {'-' * 30}")
+
+        for line in lines[-30:]:  # Derniers 30
+            try:
+                entry = json.loads(line)
+                ts = entry.get("timestamp", "")[:19]
+                action = entry.get("action", "")
+                details = entry.get("details", "")[:30]
+                dry = f"{C.YEL}[DRY]{C.R}" if entry.get("dry_run") else "     "
+                print(f"  {C.D}{ts:<22}{C.R} {dry}{action:<20} {C.D}{details}{C.R}")
+            except Exception:
+                pass
+
+        if len(lines) > 30:
+            print(f"\n  {C.D}... et {len(lines) - 30} autre(s) entrée(s){C.R}")
+
+    except Exception as e:
+        logger.error(f"Lecture impossible : {e}")
+
+
+# ══════════════════════════════════════════════════
 #  BOUCLE PRINCIPALE
 # ══════════════════════════════════════════════════
 def main():
     boot_animation()
     time.sleep(0.3)
+
+    # Charge le scope existant s'il y en a un
+    scope_validator.load_scope()
 
     while True:
         show_menu()
@@ -432,39 +530,54 @@ def main():
         try:
             # ─── PAYLOADS ──────────────────────
             if choice == "01":
+                if not ethics.confirm_action("Génération payload Python"):
+                    input(f"\n  {C.D}[Entrée] pour continuer...{C.R}")
+                    continue
                 spinner(0.3, "Préparation du module Python")
                 result = PythonPayloadGenerator().run(config)
                 if result.get("status") == "success":
                     db.log_payload("python", config.get("lhost"), config.get("lport"),
                                    result.get("payload_path"), "success")
+                    ethics.audit("PAYLOAD_PYTHON", str(result.get("payload_path")))
 
             elif choice == "02":
+                if not ethics.confirm_action("Génération payload C++"):
+                    input(f"\n  {C.D}[Entrée] pour continuer...{C.R}")
+                    continue
                 spinner(0.3, "Préparation du module C++")
                 result = CppPayloadGenerator().run(config)
                 if result.get("status") == "success":
                     db.log_payload("cpp", config.get("lhost"), config.get("lport"),
                                    result.get("payload_path"), "success")
+                    ethics.audit("PAYLOAD_CPP", str(result.get("payload_path")))
 
             elif choice == "03":
+                if not ethics.confirm_action("Génération payload MSFVenom"):
+                    input(f"\n  {C.D}[Entrée] pour continuer...{C.R}")
+                    continue
                 spinner(0.3, "Préparation de MSFVenom")
                 result = MsfvenomGenerator().run(config)
                 if result.get("status") == "success":
                     db.log_payload("msfvenom", config.get("lhost"), config.get("lport"),
                                    result.get("payload_path"), "success")
+                    ethics.audit("PAYLOAD_MSFVENOM", str(result.get("payload_path")))
 
             # ─── LISTENERS ─────────────────────
             elif choice == "04":
                 spinner(0.3, "Démarrage ncat")
                 listener.start_ncat(config)
                 db.log_listener("ncat", config.get("lhost"), config.get("lport"), "-", "running")
+                ethics.audit("LISTENER_NCAT", f"{config.get('lhost')}:{config.get('lport')}")
 
             elif choice == "05":
                 spinner(0.3, "Démarrage Metasploit")
                 listener.start_msf(config)
                 db.log_listener("msf", config.get("lhost"), config.get("lport"), "-", "running")
+                ethics.audit("LISTENER_MSF", f"{config.get('lhost')}:{config.get('lport')}")
 
             elif choice == "06":
                 listener.stop_all()
+                ethics.audit("LISTENERS_STOPPED", "tous")
 
             elif choice == "07":
                 http_server.run(config)
@@ -472,25 +585,42 @@ def main():
 
             # ─── BADUSB ────────────────────────
             elif choice == "08":
+                if not ethics.confirm_action("Génération DuckyScript"):
+                    input(f"\n  {C.D}[Entrée] pour continuer...{C.R}")
+                    continue
                 spinner(0.3, "Préparation DuckyScript")
                 BadUSBGenerator().run(config)
+                ethics.audit("BADUSB_GENERATED", "ducky")
 
             elif choice == "09":
                 DuckEncoder().run(config)
+                ethics.audit("DUCK_ENCODED", "bin")
 
             elif choice == "10":
+                if not ethics.confirm_action("Flashage sur matériel USB"):
+                    input(f"\n  {C.D}[Entrée] pour continuer...{C.R}")
+                    continue
                 USBFlasher().run(config)
+                ethics.audit("USB_FLASHED", "hardware")
 
             # ─── ATTAQUES ──────────────────────
             elif choice == "11":
+                if not ethics.confirm_action("Injection dans APK Android"):
+                    input(f"\n  {C.D}[Entrée] pour continuer...{C.R}")
+                    continue
                 spinner(0.4, "Préparation APK Injector")
                 result = ApkInjector().run(config)
                 if result.get("status") == "success":
                     db.log_payload("apk_injected", result.get("lhost"),
                                    result.get("lport"), result.get("apk_path"), "success")
+                    ethics.audit("APK_INJECTED", str(result.get("apk_path")))
 
             elif choice == "12":
+                if not ethics.confirm_action("Installation persistance WMI"):
+                    input(f"\n  {C.D}[Entrée] pour continuer...{C.R}")
+                    continue
                 WMIPersistence().run(config)
+                ethics.audit("WMI_PERSISTENCE", "windows")
 
             # ─── DIVERS ────────────────────────
             elif choice == "13":
@@ -514,6 +644,7 @@ def main():
                 spinner(0.3, "Sauvegarde")
                 if config.save():
                     logger.success("Config sauvegardée dans config.yaml")
+                    ethics.audit("CONFIG_SAVED", "config.yaml")
 
             elif choice == "16":
                 if which("msfconsole"):
@@ -529,7 +660,7 @@ def main():
             elif choice == "18":
                 clear()
                 animated_banner()
-                print(f"  {C.B}{C.GRN}FOKARAT v3.0{C.R}")
+                print(f"  {C.B}{C.GRN}FOKARAT v3.1{C.R}")
                 print(f"  {C.WHT}Auteur  :{C.R} Lwano Amissi Blanchard (FOKAS)")
                 print(f"  {C.WHT}Email   :{C.R} amissilwano5@gmail.com")
                 print(f"  {C.WHT}GitHub  :{C.R} github.com/amissilwano5-beep")
@@ -541,6 +672,7 @@ def main():
                 print()
                 spinner(0.5, "Arrêt des services")
                 listener.stop_all()
+                ethics.audit("FRAMEWORK_EXIT", "clean")
                 typewriter(f"\n  {C.GRN}Merci d'avoir utilisé FOKARAT. À bientôt !{C.R}", delay=0.02)
                 print()
                 break
@@ -570,6 +702,16 @@ def main():
             elif choice == "27":
                 handle_web_api()
                 continue
+
+            # ─── ÉTHIQUE & LÉGAL ───────────────
+            elif choice == "30":
+                handle_scope()
+
+            elif choice == "31":
+                handle_dry_run()
+
+            elif choice == "32":
+                handle_audit_log()
 
             else:
                 logger.warning("Choix invalide.")
