@@ -1,0 +1,9 @@
+nano LICENSE
+nano DISCLAIMER.md
+nano SECURITY.md
+nano CODE_OF_CONDUCT.md
+nano TERMS_OF_USE.md
+nano CHANGELOG.md
+nano core/scope.py
+nano core/ethics.py
+
