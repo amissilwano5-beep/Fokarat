@@ -1,0 +1,230 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fokarat"
+version = "3.1.0"
+description = "Framework de cybersécurité éducatif - Building the future, one tool at a time"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Lwano Amissi Blanchard (FOKAS)", email = "amissilwano5@gmail.com" }
+]
+requires-python = ">=3.8"
+keywords = ["cybersecurity", "framework", "pentest", "education", "python"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Education",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Operating System :: POSIX :: Linux",
+]
+
+dependencies = [
+    "pyyaml>=6.0",
+    "requests>=2.31.0",
+    "customtkinter>=5.2.0",
+    "Pillow>=10.0.0",
+    "psutil>=5.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "ruff>=0.1.0",
+    "black>=23.10.0",
+    "mypy>=1.6.0",
+    "pre-commit>=3.5.0",
+    "bandit>=1.7.5",
+]
+web = [
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+]
+ai = [
+    "llama-cpp-python>=0.2.0",
+]
+build = [
+    "pyinstaller>=6.0.0",
+]
+all = [
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "pyinstaller>=6.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/amissilwano5-beep/Fokarat"
+Repository = "https://github.com/amissilwano5-beep/Fokarat"
+Issues = "https://github.com/amissilwano5-beep/Fokarat/issues"
+Documentation = "https://github.com/amissilwano5-beep/Fokarat/blob/main/DOCUMENTATION.md"
+Changelog = "https://github.com/amissilwano5-beep/Fokarat/blob/main/CHANGELOG.md"
+
+[project.scripts]
+fokarat = "main:main"
+
+[tool.setuptools]
+packages = ["core", "modules", "ai", "web"]
+py-modules = ["main", "gui"]
+
+# ══════════════════════════════════════════════════
+#  RUFF - Linter ultra-rapide
+# ══════════════════════════════════════════════════
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+src = ["."]
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "output",
+    "tools",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
+]
+ignore = [
+    "E501",  # line too long (géré par black)
+    "B008",  # do not perform function calls in argument defaults
+    "RUF001", # unicode ambiguous
+    "RUF002", # unicode ambiguous in docstring
+    "RUF003", # unicode ambiguous in comment
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]  # autorise assert dans les tests
+"__init__.py" = ["F401"]  # imports inutilisés dans __init__
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# ══════════════════════════════════════════════════
+#  BLACK - Formatage
+# ══════════════════════════════════════════════════
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | __pycache__
+  | output
+  | tools
+  | build
+  | dist
+)/
+'''
+
+# ══════════════════════════════════════════════════
+#  MYPY - Vérification de types
+# ══════════════════════════════════════════════════
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
+exclude = [
+    "output",
+    "tools",
+    "build",
+    "dist",
+    ".venv",
+    "venv",
+]
+
+[[tool.mypy.overrides]]
+module = ["customtkinter.*", "llama_cpp.*", "duckencoder.*"]
+ignore_missing_imports = true
+
+# ══════════════════════════════════════════════════
+#  PYTEST - Tests
+# ══════════════════════════════════════════════════
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--cov=core",
+    "--cov=modules",
+    "--cov=ai",
+    "--cov-report=term-missing",
+    "--cov-report=html:output/coverage_html",
+    "--cov-report=xml:output/coverage.xml",
+]
+markers = [
+    "slow: tests lents (deselect avec '-m \"not slow\"')",
+    "network: tests nécessitant un accès réseau",
+    "integration: tests d'intégration",
+]
+
+# ══════════════════════════════════════════════════
+#  COVERAGE - Couverture
+# ══════════════════════════════════════════════════
+[tool.coverage.run]
+source = ["core", "modules", "ai"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+    "*/output/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+
+# ══════════════════════════════════════════════════
+#  BANDIT - Sécurité
+# ══════════════════════════════════════════════════
+[tool.bandit]
+exclude_dirs = ["tests", "output", "tools", "build", "dist"]
+skips = ["B101", "B601"]

@@ -1,0 +1,1 @@
+"""FOKARAT - Dossier des plugins utilisateur."""

@@ -1,0 +1,9 @@
+# FOKARAT - Toutes les dépendances (dev + web + ai + build)
+-r requirements-dev.txt
+
+# Web API
+fastapi==0.109.0
+uvicorn==0.27.0
+
+# Build
+pyinstaller==6.3.0

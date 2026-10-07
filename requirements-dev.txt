@@ -1,0 +1,18 @@
+# FOKARAT - Dépendances de développement
+-r requirements.txt
+
+# Tests
+pytest==7.4.4
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+
+# Qualité de code
+ruff==0.1.14
+black==24.1.1
+mypy==1.8.0
+pre-commit==3.6.0
+bandit==1.7.7
+
+# Sécurité
+pip-audit==2.7.0
+safety==3.0.0

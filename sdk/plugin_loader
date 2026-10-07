@@ -1,0 +1,107 @@
+"""
+FOKARAT - Chargeur de plugins
+Découvre et charge automatiquement tous les plugins dans plugins/.
+"""
+import os
+import sys
+import importlib.util
+import inspect
+from pathlib import Path
+
+from core.logger import Logger
+from sdk.plugin_base import PluginBase
+
+logger = Logger()
+
+
+class PluginLoader:
+    """
+    Découvre les plugins dans le dossier plugins/ et les charge.
+    Chaque plugin doit hériter de PluginBase.
+    """
+
+    PLUGINS_DIR = "plugins"
+
+    def __init__(self, plugins_dir=None):
+        self.plugins_dir = plugins_dir or self.PLUGINS_DIR
+        self.plugins = {}  # nom -> instance
+        os.makedirs(self.plugins_dir, exist_ok=True)
+
+    def discover(self) -> list:
+        """Découvre tous les fichiers de plugins."""
+        found = []
+        if not os.path.isdir(self.plugins_dir):
+            return found
+
+        for filename in sorted(os.listdir(self.plugins_dir)):
+            if filename.endswith(".py") and not filename.startswith("_"):
+                found.append(os.path.join(self.plugins_dir, filename))
+        return found
+
+    def load_plugin(self, filepath: str) -> PluginBase | None:
+        """Charge un plugin depuis un fichier."""
+        try:
+            module_name = f"fokarat_plugin_{Path(filepath).stem}"
+            spec = importlib.util.spec_from_file_location(module_name, filepath)
+            if not spec or not spec.loader:
+                return None
+
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+
+            # Cherche toutes les classes qui héritent de PluginBase
+            for name, obj in inspect.getmembers(module, inspect.isclass):
+                if (
+                    issubclass(obj, PluginBase)
+                    and obj is not PluginBase
+                    and obj.__module__ == module_name
+                ):
+                    instance = obj()
+                    instance.logger = logger
+                    instance.on_load()
+                    meta = instance.metadata
+                    self.plugins[meta.name] = instance
+                    logger.success(f"Plugin chargé : {meta.name} v{meta.version}")
+                    return instance
+            logger.warning(f"Aucun plugin valide dans {filepath}")
+            return None
+        except Exception as e:
+            logger.error(f"Erreur de chargement de {filepath} : {e}")
+            return None
+
+    def load_all(self) -> int:
+        """Charge tous les plugins disponibles."""
+        files = self.discover()
+        if not files:
+            logger.info("Aucun plugin détecté dans plugins/")
+            return 0
+
+        logger.info(f"Découverte de {len(files)} fichier(s) de plugin")
+        loaded = 0
+        for f in files:
+            if self.load_plugin(f):
+                loaded += 1
+        logger.success(f"{loaded} plugin(s) chargé(s)")
+        return loaded
+
+    def get(self, name: str) -> PluginBase | None:
+        """Récupère un plugin par son nom."""
+        return self.plugins.get(name)
+
+    def list_plugins(self) -> list:
+        """Retourne la liste des plugins chargés."""
+        return list(self.plugins.values())
+
+    def list_by_category(self, category: str) -> list:
+        """Retourne les plugins d'une catégorie."""
+        return [p for p in self.plugins.values() if p.metadata.category == category]
+
+    def unload_all(self):
+        """Décharge tous les plugins."""
+        for name, plugin in self.plugins.items():
+            try:
+                plugin.on_unload()
+            except Exception:
+                pass
+        self.plugins.clear()

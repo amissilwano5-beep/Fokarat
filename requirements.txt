@@ -1,7 +1,8 @@
-pyyaml
-pyzmq
-psutil
-customtkinter
-Pillow
-pyinstaller
-requests
+# FOKARAT - Dépendances de production (versions épinglées)
+# Mise à jour : 2026-10-07
+
+pyyaml==6.0.1
+requests==2.31.0
+customtkinter==5.2.2
+Pillow==10.2.0
+psutil==5.9.8
