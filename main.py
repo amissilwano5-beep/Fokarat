@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-FOKARAT v3.4 - Framework de cybersécurité
-Sprint 6 : Sécurité avancée (crypto, sandbox, auth, webhooks)
+FOKARAT v3.5 - Framework de cybersécurité
+Version sans module IA
 Auteur: Lwano Amissi Blanchard (FOKAS)
 """
 import os
@@ -38,7 +38,6 @@ from modules.evasion.upx_packer import UPXPacker
 from modules.evasion.multi_encoder import MultiEncoder
 from modules.evasion.anti_vm import AntiVMGenerator
 from modules.evasion.anti_debug import AntiDebugGenerator
-from ai.assistant import Assistant
 
 
 logger = Logger()
@@ -69,7 +68,7 @@ BANNER = f"""{C.GRN}{C.B}
    ██║     ╚██████╔╝██║  ██╗██║  ██║██║  ██║██║  ██║   ██║
    ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   {C.R}
 {C.CYN}{C.B}              Building the future, one tool at a time.{C.R}
-{C.YEL}                    FOKARAT Framework v3.4{C.R}
+{C.YEL}                    FOKARAT Framework v3.5{C.R}
 """
 
 
@@ -86,9 +85,8 @@ BOOT_SEQUENCE = [
     ("[BOOT 10] Chargement du mapper MITRE...", 0.06),
     ("[BOOT 11] Initialisation du chiffrement AES...", 0.06),
     ("[BOOT 12] Initialisation du sandbox...", 0.06),
-    ("[BOOT 13] Chargement de l'assistant IA...", 0.06),
-    ("[BOOT 14] Vérification des dépendances...", 0.10),
-    ("[BOOT 15] Système prêt pour la session.", 0.20),
+    ("[BOOT 13] Vérification des dépendances...", 0.10),
+    ("[BOOT 14] Système prêt pour la session.", 0.20),
 ]
 
 
@@ -234,7 +232,6 @@ def show_menu():
 
     print(separator("─", 62, C.BLU))
     print(f"  {C.B}{C.MAG}▶ DIVERS{C.R}")
-    print(menu_option("13", "Assistant IA local"))
     print(menu_option("14", "Configuration LHOST/LPORT"))
     print(menu_option("15", "Sauvegarder la config"))
     print(menu_option("16", "Ouvrir msfconsole"))
@@ -276,7 +273,6 @@ def check_dependencies():
     input(f"\n  {C.D}[Entrée] pour continuer...{C.R}")
 
 
-# ─── Gestionnaires Évasion ────────────────────────
 def handle_padding():
     path = input(f"  {C.YEL}.c à protéger :{C.R} ").strip()
     if not path or not os.path.exists(path):
@@ -519,7 +515,6 @@ def handle_reload_plugins():
     logger.success(f"{n} plugin(s) rechargé(s)")
 
 
-# ─── Gestionnaires Sécurité ───────────────────────
 def handle_encrypt_file():
     path = input(f"  {C.YEL}Fichier à chiffrer :{C.R} ").strip()
     if not path or not os.path.exists(path):
@@ -638,9 +633,6 @@ def main():
             elif choice == "12":
                 if ethics.confirm_action("WMI"):
                     WMIPersistence().run(config)
-            elif choice == "13":
-                q = input(f"  {C.CYN}Question >{C.R} ").strip()
-                print(Assistant(config.get("llm_model_path")).chat(q))
             elif choice == "14":
                 ip = input(f"  LHOST [{config.get('lhost')}] : ").strip()
                 if ip: config.set("lhost", ip)
@@ -656,7 +648,7 @@ def main():
                 check_dependencies(); continue
             elif choice == "18":
                 clear(); animated_banner()
-                print(f"  {C.B}{C.GRN}FOKARAT v3.4{C.R}")
+                print(f"  {C.B}{C.GRN}FOKARAT v3.5{C.R}")
                 print(f"  Auteur : Lwano Amissi Blanchard (FOKAS)")
                 print(f"  Bukavu, RDC — Usage éducatif uniquement.\n")
             elif choice == "19":

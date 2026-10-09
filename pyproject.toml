@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fokarat"
-version = "3.1.0"
+version = "3.5.0"
 description = "Framework de cybersécurité éducatif - Building the future, one tool at a time"
 readme = "README.md"
 license = { text = "MIT" }
@@ -48,7 +48,6 @@ dev = [
     "bandit>=1.7.5",
 ]
 web = ["fastapi>=0.104.0", "uvicorn>=0.24.0"]
-ai = ["llama-cpp-python>=0.2.0"]
 build = ["pyinstaller>=6.0.0"]
 all = ["fastapi>=0.104.0", "uvicorn>=0.24.0", "pyinstaller>=6.0.0"]
 
@@ -63,12 +62,9 @@ Changelog = "https://github.com/amissilwano5-beep/Fokarat/blob/main/CHANGELOG.md
 fokarat = "main:main"
 
 [tool.setuptools]
-packages = ["core", "modules", "ai", "web"]
+packages = ["core", "modules", "web"]
 py-modules = ["main", "gui"]
 
-# ══════════════════════════════════════════════════
-#  RUFF
-# ══════════════════════════════════════════════════
 [tool.ruff]
 line-length = 100
 target-version = "py38"
@@ -87,9 +83,6 @@ ignore = ["E501", "B008", "RUF001", "RUF002", "RUF003"]
 quote-style = "double"
 indent-style = "space"
 
-# ══════════════════════════════════════════════════
-#  BLACK
-# ══════════════════════════════════════════════════
 [tool.black]
 line-length = 100
 target-version = ["py38", "py39", "py310", "py311", "py312"]
@@ -97,9 +90,6 @@ extend-exclude = '''
 /(\.git|\.venv|venv|__pycache__|output|tools|build|dist)/
 '''
 
-# ══════════════════════════════════════════════════
-#  MYPY
-# ══════════════════════════════════════════════════
 [tool.mypy]
 python_version = "3.8"
 warn_return_any = true
@@ -110,34 +100,24 @@ show_error_codes = true
 exclude = ["output", "tools", "build", "dist", ".venv", "venv"]
 
 [[tool.mypy.overrides]]
-module = ["customtkinter.*", "llama_cpp.*", "duckencoder.*"]
+module = ["customtkinter.*", "duckencoder.*"]
 ignore_missing_imports = true
 
-# ══════════════════════════════════════════════════
-#  PYTEST - Options minimales (cov activée via Makefile)
-# ══════════════════════════════════════════════════
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = [
-    "-v",
-    "--strict-markers",
-    "--tb=short",
-]
+addopts = ["-v", "--strict-markers", "--tb=short"]
 markers = [
     "slow: tests lents",
     "network: tests nécessitant un accès réseau",
     "integration: tests d'intégration",
 ]
 
-# ══════════════════════════════════════════════════
-#  COVERAGE
-# ══════════════════════════════════════════════════
 [tool.coverage.run]
-source = ["core", "modules", "ai"]
+source = ["core", "modules"]
 omit = ["*/tests/*", "*/test_*.py", "*/__init__.py", "*/output/*"]
 
 [tool.coverage.report]
@@ -148,9 +128,6 @@ exclude_lines = [
     "@abstractmethod",
 ]
 
-# ══════════════════════════════════════════════════
-#  BANDIT
-# ══════════════════════════════════════════════════
 [tool.bandit]
 exclude_dirs = ["tests", "output", "tools", "build", "dist"]
 skips = ["B101", "B601"]
