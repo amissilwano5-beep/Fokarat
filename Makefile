@@ -1,17 +1,15 @@
-# FOKARAT - Makefile
-# Usage : make <commande>
-
-.PHONY: help install install-dev test test-fast lint format type-check security clean build run all
+.PHONY: help install install-dev test test-fast test-cov lint format type-check security clean build run all
 
 help:
 	@echo "FOKARAT - Commandes disponibles :"
 	@echo ""
 	@echo "  make install       Installer les dépendances de production"
 	@echo "  make install-dev   Installer les dépendances de développement"
-	@echo "  make test          Lancer tous les tests avec couverture"
-	@echo "  make test-fast     Lancer les tests rapides (sans slow)"
+	@echo "  make test          Lancer les tests (sans couverture)"
+	@echo "  make test-cov      Lancer les tests avec couverture"
+	@echo "  make test-fast     Lancer les tests rapides"
 	@echo "  make lint          Vérifier le code avec ruff"
-	@echo "  make format        Formater le code avec black + ruff"
+	@echo "  make format        Formater le code"
 	@echo "  make type-check    Vérifier les types avec mypy"
 	@echo "  make security      Scanner la sécurité avec bandit"
 	@echo "  make clean         Nettoyer les fichiers temporaires"
@@ -28,6 +26,9 @@ install-dev:
 
 test:
 	pytest
+
+test-cov:
+	pytest --cov=core --cov=modules --cov=ai --cov-report=term-missing --cov-report=html:output/coverage_html
 
 test-fast:
 	pytest -m "not slow"

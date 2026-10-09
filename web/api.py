@@ -1,27 +1,23 @@
 """
-FOKARAT - API REST Stable v1.0
-Documentation : http://localhost:5000/docs
+FOKARAT - API REST Stable v1.1
+Auth JWT + Webhooks + MITRE
 """
 import os
 import sys
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Depends, Header
 from pydantic import BaseModel, Field
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from web.auth import require_auth, jwt_manager
+from web.webhooks import webhook_manager
+
 app = FastAPI(
     title="FOKARAT API",
-    version="1.0.0",
-    description=(
-        "API REST pour piloter FOKARAT. "
-        "⚠️ Usage éducatif uniquement. Ne pas exposer sur Internet sans auth."
-    ),
-    contact={
-        "name": "Lwano Amissi Blanchard (FOKAS)",
-        "email": "amissilwano5@gmail.com",
-    },
+    version="1.1.0",
+    description="API REST sécurisée pour piloter FOKARAT.",
+    contact={"name": "Lwano Amissi Blanchard (FOKAS)", "email": "amissilwano5@gmail.com"},
     license_info={"name": "MIT"},
 )
 
@@ -30,31 +26,59 @@ app = FastAPI(
 #  MODÈLES
 # ══════════════════════════════════════════════════
 class PayloadRequest(BaseModel):
-    type: str = Field(..., description="Type de payload : python, cpp, msfvenom")
-    lhost: str = Field(..., description="Adresse IP d'écoute")
-    lport: int = Field(..., ge=1, le=65535, description="Port d'écoute (1-65535)")
+    type: str = Field(..., description="python, cpp, msfvenom")
+    lhost: str
+    lport: int = Field(..., ge=1, le=65535)
 
 
 class ScopeRequest(BaseModel):
-    target: str = Field(..., description="Cible autorisée")
-    auth_ref: str = Field(..., description="Référence de l'autorisation écrite")
-    hours: int = Field(24, ge=1, le=168, description="Durée en heures (max 168)")
+    target: str
+    auth_ref: str
+    hours: int = Field(24, ge=1, le=168)
 
 
 class MitreRequest(BaseModel):
-    actions: list = Field(..., description="Liste des actions (ex: ['padding','upx_pack'])")
+    actions: list
+
+
+class TokenRequest(BaseModel):
+    username: str
+    password: str
+
+
+class WebhookRequest(BaseModel):
+    url: str
 
 
 # ══════════════════════════════════════════════════
-#  ENDPOINTS
+#  AUTH
+# ══════════════════════════════════════════════════
+@app.post("/auth/token", tags=["Auth"])
+def get_token(req: TokenRequest):
+    """
+    Génère un token JWT.
+    Utilise FOKARAT_API_USER / FOKARAT_API_PASS (env).
+    Défaut : admin / fokarat
+    """
+    expected_user = os.environ.get("FOKARAT_API_USER", "admin")
+    expected_pass = os.environ.get("FOKARAT_API_PASS", "fokarat")
+
+    if req.username != expected_user or req.password != expected_pass:
+        raise HTTPException(status_code=401, detail="Identifiants invalides")
+
+    token = jwt_manager.create_token(req.username, expiry=3600)
+    return {"access_token": token, "token_type": "bearer", "expires_in": 3600}
+
+
+# ══════════════════════════════════════════════════
+#  STATUS (public)
 # ══════════════════════════════════════════════════
 @app.get("/", tags=["Status"])
 def root():
-    """Retourne l'état général de l'API."""
     return {
         "framework": "FOKARAT",
-        "version": "3.3.0",
-        "api_version": "1.0.0",
+        "version": "3.4.0",
+        "api_version": "1.1.0",
         "status": "running",
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
@@ -62,26 +86,21 @@ def root():
 
 @app.get("/health", tags=["Status"])
 def health():
-    """Healthcheck simple."""
     return {"status": "ok"}
 
 
 @app.get("/version", tags=["Status"])
 def version():
-    """Retourne les versions des composants."""
-    return {
-        "fokarat": "3.3.0",
-        "api": "1.0.0",
-        "python": sys.version.split()[0],
-    }
+    return {"fokarat": "3.4.0", "api": "1.1.0", "python": sys.version.split()[0]}
 
 
-# ─── PAYLOADS ─────────────────────────────────────
+# ══════════════════════════════════════════════════
+#  PAYLOADS (protégés)
+# ══════════════════════════════════════════════════
 @app.post("/payload/python", tags=["Payloads"])
-def gen_python(req: PayloadRequest):
-    """Génère un payload Python."""
+def gen_python(req: PayloadRequest, _=Depends(require_auth)):
     if req.type != "python":
-        raise HTTPException(status_code=400, detail="Type doit être 'python'")
+        raise HTTPException(400, "type doit être 'python'")
     try:
         from core.config import Config
         from modules.payload_generators.python_gen import PythonPayloadGenerator
@@ -89,136 +108,141 @@ def gen_python(req: PayloadRequest):
         cfg.set("lhost", req.lhost)
         cfg.set("lport", req.lport)
         result = PythonPayloadGenerator().run(cfg)
+        webhook_manager.emit("payload.generated", {"type": "python", "lhost": req.lhost})
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(500, str(e))
 
 
 @app.post("/payload/cpp", tags=["Payloads"])
-def gen_cpp(req: PayloadRequest):
-    """Génère un payload C++."""
+def gen_cpp(req: PayloadRequest, _=Depends(require_auth)):
     if req.type != "cpp":
-        raise HTTPException(status_code=400, detail="Type doit être 'cpp'")
+        raise HTTPException(400, "type doit être 'cpp'")
     try:
         from core.config import Config
         from modules.payload_generators.cpp_gen import CppPayloadGenerator
         cfg = Config()
         cfg.set("lhost", req.lhost)
         cfg.set("lport", req.lport)
-        return CppPayloadGenerator().run(cfg)
+        result = CppPayloadGenerator().run(cfg)
+        webhook_manager.emit("payload.generated", {"type": "cpp", "lhost": req.lhost})
+        return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(500, str(e))
 
 
 @app.post("/payload/msfvenom", tags=["Payloads"])
-def gen_msfvenom(req: PayloadRequest):
-    """Génère un payload MSFVenom."""
+def gen_msfvenom(req: PayloadRequest, _=Depends(require_auth)):
     if req.type != "msfvenom":
-        raise HTTPException(status_code=400, detail="Type doit être 'msfvenom'")
+        raise HTTPException(400, "type doit être 'msfvenom'")
     try:
         from core.config import Config
         from modules.payload_generators.msfvenom_gen import MsfvenomGenerator
         cfg = Config()
         cfg.set("lhost", req.lhost)
         cfg.set("lport", req.lport)
-        return MsfvenomGenerator().run(cfg)
+        result = MsfvenomGenerator().run(cfg)
+        webhook_manager.emit("payload.generated", {"type": "msfvenom", "lhost": req.lhost})
+        return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(500, str(e))
 
 
 @app.get("/payloads", tags=["Payloads"])
-def list_payloads():
-    """Liste tous les payloads générés."""
-    try:
-        from core.database import Database
-        return {"payloads": Database().get_all_payloads()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def list_payloads(_=Depends(require_auth)):
+    from core.database import Database
+    return {"payloads": Database().get_all_payloads()}
 
 
-# ─── SESSIONS ─────────────────────────────────────
-@app.get("/listeners", tags=["Listeners"])
-def list_listeners():
-    """Liste tous les listeners enregistrés."""
-    try:
-        from core.database import Database
-        return {"listeners": Database().get_all_listeners()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ─── RAPPORTS ─────────────────────────────────────
+# ══════════════════════════════════════════════════
+#  RAPPORTS (protégés)
+# ══════════════════════════════════════════════════
 @app.get("/report", tags=["Reports"])
-def report():
-    """Génère et retourne un rapport d'opérations."""
-    try:
-        from core.database import Database
-        path = Database().export_report()
-        with open(path, "r", encoding="utf-8") as f:
-            return {"report": f.read(), "path": path}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def report(_=Depends(require_auth)):
+    from core.database import Database
+    path = Database().export_report()
+    with open(path, encoding="utf-8") as f:
+        return {"report": f.read(), "path": path}
 
 
 @app.post("/report/mitre", tags=["Reports"])
-def report_mitre(req: MitreRequest):
-    """Génère un rapport MITRE ATT&CK à partir d'une liste d'actions."""
-    try:
-        from core.mitre import MitreMapper
-        mapper = MitreMapper()
-        content = mapper.generate_report(req.actions)
-        return {"report": content}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def report_mitre(req: MitreRequest, _=Depends(require_auth)):
+    from core.mitre import MitreMapper
+    content = MitreMapper().generate_report(req.actions)
+    return {"report": content}
 
 
 @app.get("/mitre/techniques", tags=["Reports"])
-def mitre_techniques():
-    """Liste toutes les techniques MITRE connues."""
+def mitre_techniques(_=Depends(require_auth)):
     from core.mitre import MitreMapper
     return {"techniques": MitreMapper().list_all()}
 
 
-# ─── SCOPE ────────────────────────────────────────
+# ══════════════════════════════════════════════════
+#  SCOPE (protégés)
+# ══════════════════════════════════════════════════
 @app.post("/scope/declare", tags=["Éthique"])
-def declare_scope(req: ScopeRequest):
-    """Déclare un scope autorisé (obligatoire avant toute attaque)."""
-    try:
-        from core.scope import ScopeValidator
-        sv = ScopeValidator()
-        # Utilise la méthode _ask_confirmation en mode silencieux
-        import datetime
-        scope = {
-            "target": req.target,
-            "auth_ref": req.auth_ref,
-            "created_at": datetime.datetime.utcnow().isoformat(),
-            "expires_at": (datetime.datetime.utcnow() +
-                          datetime.timedelta(hours=req.hours)).isoformat(),
-            "hours": req.hours,
-        }
-        import json
-        os.makedirs("output", exist_ok=True)
-        with open(sv.SCOPE_FILE, "w") as f:
-            json.dump(scope, f, indent=2)
-        return {"status": "success", "scope": scope}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def declare_scope(req: ScopeRequest, _=Depends(require_auth)):
+    import json, datetime
+    from core.scope import ScopeValidator
+    sv = ScopeValidator()
+    scope = {
+        "target": req.target,
+        "auth_ref": req.auth_ref,
+        "created_at": datetime.datetime.utcnow().isoformat(),
+        "expires_at": (datetime.datetime.utcnow() +
+                       datetime.timedelta(hours=req.hours)).isoformat(),
+        "hours": req.hours,
+    }
+    os.makedirs("output", exist_ok=True)
+    with open(sv.SCOPE_FILE, "w") as f:
+        json.dump(scope, f, indent=2)
+    webhook_manager.emit("scope.declared", {"target": req.target})
+    return {"status": "success", "scope": scope}
 
 
 @app.get("/scope/active", tags=["Éthique"])
-def get_active_scope():
-    """Retourne le scope actif s'il existe."""
+def get_active_scope(_=Depends(require_auth)):
     from core.scope import ScopeValidator
     scope = ScopeValidator().load_scope()
-    if not scope:
-        return {"active": False, "scope": None}
-    return {"active": True, "scope": scope}
+    return {"active": bool(scope), "scope": scope}
+
+
+# ══════════════════════════════════════════════════
+#  WEBHOOKS
+# ══════════════════════════════════════════════════
+@app.post("/webhooks/add", tags=["Webhooks"])
+def add_webhook(req: WebhookRequest, _=Depends(require_auth)):
+    webhook_manager.add_hook(req.url)
+    return {"status": "success", "hooks": webhook_manager.hooks}
+
+
+@app.get("/webhooks/list", tags=["Webhooks"])
+def list_webhooks(_=Depends(require_auth)):
+    return {"hooks": webhook_manager.hooks}
+
+
+@app.post("/webhooks/test", tags=["Webhooks"])
+def test_webhook(_=Depends(require_auth)):
+    webhook_manager.emit("test", {"message": "FOKARAT test event"})
+    return {"status": "queued"}
 
 
 # ══════════════════════════════════════════════════
 #  LANCEMENT
 # ══════════════════════════════════════════════════
-def start_web(host="0.0.0.0", port=5000):
+@app.on_event("startup")
+def startup():
+    webhook_manager.start()
+
+
+@app.on_event("shutdown")
+def shutdown():
+    webhook_manager.stop()
+
+
+def start_web(host="127.0.0.1", port=5000):
+    """Démarre l'API (host par défaut : localhost uniquement pour la sécurité)."""
     import uvicorn
     uvicorn.run(app, host=host, port=port, log_level="warning")
 

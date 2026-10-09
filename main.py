@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-FOKARAT v3.3 - Framework de cybersécurité
-Plugins + Éthique + Scope + MITRE + API
+FOKARAT v3.4 - Framework de cybersécurité
+Sprint 6 : Sécurité avancée (crypto, sandbox, auth, webhooks)
 Auteur: Lwano Amissi Blanchard (FOKAS)
 """
 import os
@@ -19,6 +19,8 @@ from core.scope import ScopeValidator
 from core.ethics import EthicsController
 from core.plugin_loader import PluginLoader
 from core.mitre import MitreMapper
+from core.crypto import CryptoManager
+from core.sandbox import Sandbox
 
 from modules.payload_generators.python_gen import PythonPayloadGenerator
 from modules.payload_generators.cpp_gen import CppPayloadGenerator
@@ -48,6 +50,8 @@ scope_validator = ScopeValidator()
 ethics = EthicsController()
 plugin_loader = PluginLoader()
 mitre = MitreMapper()
+crypto = CryptoManager()
+sandbox = Sandbox()
 
 
 class C:
@@ -65,24 +69,26 @@ BANNER = f"""{C.GRN}{C.B}
    ██║     ╚██████╔╝██║  ██╗██║  ██║██║  ██║██║  ██║   ██║
    ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   {C.R}
 {C.CYN}{C.B}              Building the future, one tool at a time.{C.R}
-{C.YEL}                    FOKARAT Framework v3.3{C.R}
+{C.YEL}                    FOKARAT Framework v3.4{C.R}
 """
 
 
 BOOT_SEQUENCE = [
-    ("[BOOT 01] Initialisation du noyau FOKARAT...", 0.08),
-    ("[BOOT 02] Chargement des modules payloads...", 0.08),
-    ("[BOOT 03] Chargement des listeners...", 0.08),
-    ("[BOOT 04] Chargement des modules Android...", 0.08),
-    ("[BOOT 05] Chargement des modules d'évasion...", 0.08),
-    ("[BOOT 06] Initialisation de la base de données...", 0.08),
-    ("[BOOT 07] Chargement du contrôleur éthique...", 0.08),
-    ("[BOOT 08] Validation du scope...", 0.08),
-    ("[BOOT 09] Chargement du système de plugins...", 0.08),
-    ("[BOOT 10] Chargement du mapper MITRE...", 0.08),
-    ("[BOOT 11] Chargement de l'assistant IA...", 0.08),
-    ("[BOOT 12] Vérification des dépendances...", 0.10),
-    ("[BOOT 13] Système prêt pour la session.", 0.20),
+    ("[BOOT 01] Initialisation du noyau FOKARAT...", 0.06),
+    ("[BOOT 02] Chargement des modules payloads...", 0.06),
+    ("[BOOT 03] Chargement des listeners...", 0.06),
+    ("[BOOT 04] Chargement des modules Android...", 0.06),
+    ("[BOOT 05] Chargement des modules d'évasion...", 0.06),
+    ("[BOOT 06] Initialisation de la base de données...", 0.06),
+    ("[BOOT 07] Chargement du contrôleur éthique...", 0.06),
+    ("[BOOT 08] Validation du scope...", 0.06),
+    ("[BOOT 09] Chargement du système de plugins...", 0.06),
+    ("[BOOT 10] Chargement du mapper MITRE...", 0.06),
+    ("[BOOT 11] Initialisation du chiffrement AES...", 0.06),
+    ("[BOOT 12] Initialisation du sandbox...", 0.06),
+    ("[BOOT 13] Chargement de l'assistant IA...", 0.06),
+    ("[BOOT 14] Vérification des dépendances...", 0.10),
+    ("[BOOT 15] Système prêt pour la session.", 0.20),
 ]
 
 
@@ -157,12 +163,14 @@ def show_menu():
     scope_status = f"{C.GRN}✓{C.R}" if scope_validator.active_scope else f"{C.RED}✗{C.R}"
     dry_status = f"{C.YEL}ON{C.R}" if ethics.dry_run else f"{C.D}OFF{C.R}"
     plugins_count = len(plugin_loader.plugins)
+    crypto_backend = crypto.get_backend()
 
     print(f"  {C.MAG}◆{C.R} LHOST:{C.CYN}{lhost}{C.R}  "
           f"{C.MAG}◆{C.R} LPORT:{C.CYN}{lport}{C.R}  "
           f"{C.MAG}◆{C.R} Scope:{scope_status}  "
           f"{C.MAG}◆{C.R} DRY:{dry_status}  "
-          f"{C.MAG}◆{C.R} Plugins:{C.CYN}{plugins_count}{C.R}")
+          f"{C.MAG}◆{C.R} Plugins:{C.CYN}{plugins_count}{C.R}  "
+          f"{C.MAG}◆{C.R} Crypto:{C.CYN}{crypto_backend}{C.R}")
     print()
     print(separator("═", 62, C.CYN))
 
@@ -211,6 +219,14 @@ def show_menu():
     print(menu_option("34", "Export MITRE Navigator (JSON)"))
 
     print(separator("─", 62, C.BLU))
+    print(f"  {C.B}{C.YEL}▶ SÉCURITÉ AVANCÉE{C.R}")
+    print(menu_option("50", "Chiffrer un fichier (AES-256)"))
+    print(menu_option("51", "Déchiffrer un fichier"))
+    print(menu_option("52", "Tester le sandbox (limites)"))
+    print(menu_option("53", "Générer un token JWT API"))
+    print(menu_option("54", "Ajouter un webhook SIEM"))
+
+    print(separator("─", 62, C.BLU))
     print(f"  {C.B}{C.RED}▶ ÉTHIQUE & LÉGAL{C.R}")
     print(menu_option("30", "Déclarer un scope"))
     print(menu_option("31", "Activer / Désactiver DRY-RUN"))
@@ -255,15 +271,12 @@ def check_dependencies():
     print()
     if missing:
         logger.warning(f"{len(missing)} outil(s) manquant(s).")
-        print(f"\n  {C.CYN}sudo apt install python3 python3-pip git g++ mingw-w64 ncat \\")
-        print(f"        apktool default-jdk zipalign binutils-avr upx-ucl{C.R}")
-        print(f"  {C.CYN}pip install pyinstaller fastapi uvicorn{C.R}")
     else:
-        logger.success("Toutes les dépendances sont présentes !")
+        logger.success("Toutes les dépendances présentes !")
     input(f"\n  {C.D}[Entrée] pour continuer...{C.R}")
 
 
-# ─── Gestionnaires ────────────────────────────────
+# ─── Gestionnaires Évasion ────────────────────────
 def handle_padding():
     path = input(f"  {C.YEL}.c à protéger :{C.R} ").strip()
     if not path or not os.path.exists(path):
@@ -271,10 +284,9 @@ def handle_padding():
         return
     with open(path, encoding="utf-8") as f:
         code = f.read()
-    wrapped = PaddingGenerator().wrap_payload(code, 8, 15)
     out = path.replace(".c", "_protected.c")
     with open(out, "w", encoding="utf-8") as f:
-        f.write(wrapped)
+        f.write(PaddingGenerator().wrap_payload(code, 8, 15))
     logger.success(f"Protégé : {out}")
     ethics.audit("PADDING", out)
 
@@ -286,18 +298,17 @@ def handle_python_obfuscation():
         return
     with open(path, encoding="utf-8") as f:
         code = f.read()
-    obs = PythonObfuscator().obfuscate(code)
     out = path.replace(".py", "_obf.py")
     with open(out, "w", encoding="utf-8") as f:
-        f.write(obs)
+        f.write(PythonObfuscator().obfuscate(code))
     logger.success(f"Obfusqué : {out}")
     ethics.audit("PY_OBF", out)
 
 
 def handle_upx():
-    path = input(f"  {C.YEL}Binaire à compresser :{C.R} ").strip()
+    path = input(f"  {C.YEL}Binaire :{C.R} ").strip()
     if not path or not os.path.exists(path):
-        logger.error("Fichier introuvable.")
+        logger.error("Introuvable.")
         return
     UPXPacker().pack(path, True)
     ethics.audit("UPX", path)
@@ -355,45 +366,31 @@ def handle_report():
 
 
 def handle_mitre_report():
-    """Génère un rapport MITRE basé sur le journal d'audit."""
     audit_file = "output/audit.log"
     if not os.path.exists(audit_file):
         logger.warning("Aucune action enregistrée.")
         return
-
-    # Récupère les actions du journal
     action_map = {
-        "PADDING_APPLIED": "padding",
-        "PYTHON_OBFUSCATED": "obfuscation",
-        "UPX_PACKED": "upx_pack",
-        "MULTI_ENCODED": "multi_encoder",
-        "ANTI_VM_APPLIED": "anti_vm",
-        "ANTI_DEBUG_APPLIED": "anti_debug",
-        "PAYLOAD_PYTHON": "python_execution",
-        "PAYLOAD_CPP": "cmd_execution",
-        "PAYLOAD_MSFVENOM": "reverse_shell",
-        "LISTENER_NCAT": "reverse_shell",
-        "LISTENER_MSF": "msf_handler",
-        "BADUSB_GENERATED": "phishing_badusb",
-        "WMI_PERSISTENCE": "wmi_persistence",
-        "PLUGIN_EXECUTED": "port_scan",
+        "PADDING_APPLIED": "padding", "PYTHON_OBFUSCATED": "obfuscation",
+        "UPX_PACKED": "upx_pack", "MULTI_ENCODED": "multi_encoder",
+        "ANTI_VM_APPLIED": "anti_vm", "ANTI_DEBUG_APPLIED": "anti_debug",
+        "PAYLOAD_PYTHON": "python_execution", "PAYLOAD_CPP": "cmd_execution",
+        "PAYLOAD_MSFVENOM": "reverse_shell", "LISTENER_NCAT": "reverse_shell",
+        "LISTENER_MSF": "msf_handler", "BADUSB_GENERATED": "phishing_badusb",
+        "WMI_PERSISTENCE": "wmi_persistence", "PLUGIN_EXECUTED": "port_scan",
     }
-
     actions = set()
     with open(audit_file) as f:
         for line in f:
             try:
-                entry = json.loads(line)
-                act = entry.get("action", "")
-                if act in action_map:
-                    actions.add(action_map[act])
+                e = json.loads(line)
+                if e.get("action") in action_map:
+                    actions.add(action_map[e["action"]])
             except Exception:
                 pass
-
     if not actions:
-        logger.warning("Aucune action MITRE détectée.")
+        logger.warning("Aucune action MITRE.")
         return
-
     content = mitre.generate_report(list(actions))
     out = "output/mitre_report.md"
     os.makedirs("output", exist_ok=True)
@@ -404,49 +401,40 @@ def handle_mitre_report():
 
 
 def handle_mitre_navigator():
-    """Exporte un fichier JSON pour MITRE Navigator."""
     audit_file = "output/audit.log"
     if not os.path.exists(audit_file):
-        logger.warning("Aucune action enregistrée.")
+        logger.warning("Aucune action.")
         return
-
     action_map = {
-        "PADDING_APPLIED": "padding",
-        "PYTHON_OBFUSCATED": "obfuscation",
-        "UPX_PACKED": "upx_pack",
-        "MULTI_ENCODED": "multi_encoder",
-        "ANTI_VM_APPLIED": "anti_vm",
-        "ANTI_DEBUG_APPLIED": "anti_debug",
-        "PAYLOAD_MSFVENOM": "reverse_shell",
-        "WMI_PERSISTENCE": "wmi_persistence",
+        "PADDING_APPLIED": "padding", "PYTHON_OBFUSCATED": "obfuscation",
+        "UPX_PACKED": "upx_pack", "MULTI_ENCODED": "multi_encoder",
+        "ANTI_VM_APPLIED": "anti_vm", "ANTI_DEBUG_APPLIED": "anti_debug",
+        "PAYLOAD_MSFVENOM": "reverse_shell", "WMI_PERSISTENCE": "wmi_persistence",
     }
-
     actions = set()
     with open(audit_file) as f:
         for line in f:
             try:
-                entry = json.loads(line)
-                act = entry.get("action", "")
-                if act in action_map:
-                    actions.add(action_map[act])
+                e = json.loads(line)
+                if e.get("action") in action_map:
+                    actions.add(action_map[e["action"]])
             except Exception:
                 pass
-
     if not actions:
-        logger.warning("Aucune action à mapper.")
+        logger.warning("Aucune action.")
         return
-
     out = "output/mitre_navigator.json"
     os.makedirs("output", exist_ok=True)
     mitre.export_navigator_json(list(actions), out)
 
 
 def handle_web_api():
-    logger.info("API Web sur http://localhost:5000/docs")
+    logger.info("API sur http://localhost:5000/docs")
+    logger.info("Auth : FOKARAT_API_USER / FOKARAT_API_PASS (défaut admin/fokarat)")
     ethics.audit("API_STARTED", "5000")
     try:
         from web.api import start_web
-        start_web()
+        start_web(host="127.0.0.1", port=5000)
     except ImportError:
         logger.error("pip install fastapi uvicorn")
 
@@ -531,6 +519,83 @@ def handle_reload_plugins():
     logger.success(f"{n} plugin(s) rechargé(s)")
 
 
+# ─── Gestionnaires Sécurité ───────────────────────
+def handle_encrypt_file():
+    path = input(f"  {C.YEL}Fichier à chiffrer :{C.R} ").strip()
+    if not path or not os.path.exists(path):
+        logger.error("Introuvable.")
+        return
+    crypto.encrypt_file(path)
+    ethics.audit("FILE_ENCRYPTED", path)
+
+
+def handle_decrypt_file():
+    path = input(f"  {C.YEL}Fichier .enc à déchiffrer :{C.R} ").strip()
+    if not path or not os.path.exists(path):
+        logger.error("Introuvable.")
+        return
+    try:
+        content = crypto.decrypt_file(path)
+        out = path.replace(".enc", ".dec")
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(content)
+        logger.success(f"Déchiffré : {out}")
+        ethics.audit("FILE_DECRYPTED", path)
+    except Exception as e:
+        logger.error(f"Échec : {e}")
+
+
+def handle_test_sandbox():
+    print(f"\n  {C.YEL}Test du sandbox :{C.R}")
+    print(f"  Limites actuelles :")
+    for k, v in sandbox.limits.items():
+        print(f"    {k} = {v}")
+    print()
+
+    cmd = input(f"  {C.YEL}Commande à tester [{C.D}echo hello{C.R}] :{C.R} ").strip()
+    if not cmd:
+        cmd = "echo hello"
+
+    print()
+    result = sandbox.run(cmd)
+    print(f"\n  {C.GRN}Status :{C.R} {result['status']}")
+    print(f"  {C.GRN}Durée  :{C.R} {result['duration']}s")
+    print(f"  {C.GRN}Code   :{C.R} {result['returncode']}")
+    if result["stdout"]:
+        print(f"  {C.GRN}Sortie :{C.R}\n{result['stdout'][:500]}")
+    if result["stderr"]:
+        print(f"  {C.YEL}Erreurs :{C.R}\n{result['stderr'][:500]}")
+
+    ethics.audit("SANDBOX_TEST", cmd)
+
+
+def handle_jwt_token():
+    try:
+        from web.auth import jwt_manager
+        user = input(f"  {C.YEL}Username [admin] :{C.R} ").strip() or "admin"
+        token = jwt_manager.create_token(user, expiry=3600)
+        print(f"\n  {C.GRN}Token JWT (valide 1h) :{C.R}\n")
+        print(f"  {C.CYN}{token}{C.R}\n")
+        print(f"  {C.D}Utilisation : Authorization: Bearer <token>{C.R}")
+        print(f"  {C.D}Test : curl -H 'Authorization: Bearer {token[:20]}...' http://localhost:5000/payloads{C.R}\n")
+        ethics.audit("JWT_GENERATED", user)
+    except ImportError as e:
+        logger.error(f"Module auth indisponible : {e}")
+
+
+def handle_webhook_add():
+    try:
+        from web.webhooks import webhook_manager
+        url = input(f"  {C.YEL}URL du webhook (Slack, Splunk, etc.) :{C.R} ").strip()
+        if not url:
+            return
+        webhook_manager.add_hook(url)
+        ethics.audit("WEBHOOK_ADDED", url)
+        print(f"\n  {C.GRN}Webhook ajouté. Il recevra tous les événements.{C.R}\n")
+    except ImportError as e:
+        logger.error(f"Module webhooks indisponible : {e}")
+
+
 def main():
     boot_animation()
     time.sleep(0.3)
@@ -591,7 +656,7 @@ def main():
                 check_dependencies(); continue
             elif choice == "18":
                 clear(); animated_banner()
-                print(f"  {C.B}{C.GRN}FOKARAT v3.3{C.R}")
+                print(f"  {C.B}{C.GRN}FOKARAT v3.4{C.R}")
                 print(f"  Auteur : Lwano Amissi Blanchard (FOKAS)")
                 print(f"  Bukavu, RDC — Usage éducatif uniquement.\n")
             elif choice == "19":
@@ -617,6 +682,12 @@ def main():
             elif choice == "40": handle_list_plugins()
             elif choice == "41": handle_run_plugin()
             elif choice == "42": handle_reload_plugins()
+
+            elif choice == "50": handle_encrypt_file()
+            elif choice == "51": handle_decrypt_file()
+            elif choice == "52": handle_test_sandbox()
+            elif choice == "53": handle_jwt_token()
+            elif choice == "54": handle_webhook_add()
 
             else:
                 logger.warning("Choix invalide.")
