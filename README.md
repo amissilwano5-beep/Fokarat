@@ -1,3 +1,4 @@
+
 <!-- ═══════════════════════════════════════════════════════════════ -->
 <!--                            FOKARAT                              -->
 <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -221,11 +222,7 @@ Vous êtes libre de :
 À condition de conserver la notice de copyright.
 
 🙏 Remerciements
-TheFatRat — Inspiration
-
-Metasploit Framework — Payloads
-
-Hak5 — BadUSB
+La communauté BDN BUKAVU et la marque FOKAS
 
 MITRE ATT&CK — Framework de mapping
 
