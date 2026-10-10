@@ -36,7 +36,7 @@ Inspiré de **TheFatRat** mais avec une **architecture moderne** (plugins, API R
 > ⚠️ **FOKARAT est un outil ÉDUCATIF.** Toute utilisation sur des systèmes sans autorisation écrite est **illégale**.
 > Lisez [DISCLAIMER.md](DISCLAIMER.md) avant toute utilisation.
 
----
+
 
 ## ✨ Fonctionnalités
 
@@ -142,82 +142,9 @@ text
 ▶ ÉTHIQUE       ▶ DIVERS
 📖 Guide détaillé : DOCUMENTATION.md
 
-🏗️ Architecture
-text
-Fokarat/
-├── core/                    # Cœur du framework
-│   ├── config.py            # Gestion configuration YAML
-│   ├── logger.py            # Logs colorés + JSON
-│   ├── database.py          # Base SQLite
-│   ├── scope.py             # Validation de scope
-│   ├── ethics.py            # Kill switch + audit + dry-run
-│   ├── crypto.py            # Chiffrement AES-256-GCM
-│   ├── sandbox.py           # Isolation CPU/RAM
-│   ├── mitre.py             # Mapping MITRE ATT&CK
-│   └── plugin_loader.py     # Chargeur de plugins
-│
-├── modules/                 # Modules fonctionnels
-│   ├── payload_generators/  # Python, C++, MSFVenom
-│   ├── listeners/           # ncat, Metasploit
-│   ├── injectors/           # BadUSB, encoder, flasher, HTTP
-│   ├── android/             # APK Injector
-│   ├── persistence/         # WMI
-│   └── evasion/             # Padding, obfuscation, UPX, anti-VM, anti-debug
-│
-├── sdk/                     # SDK plugin
-│   └── plugin_base.py       # Classe de base pour plugins
-│
-├── plugins/                 # Plugins utilisateur
-│   ├── hello_world.py
-│   └── port_scanner.py
-│
-├── web/                     # API REST
-│   ├── api.py               # FastAPI
-│   ├── auth.py              # JWT
-│   └── webhooks.py          # SIEM/SOAR
-│
-├── tests/                   # Tests unitaires (pytest)
-│
-├── .github/                 # CI/CD + templates
-│   ├── workflows/ci.yml
-│   └── ISSUE_TEMPLATE/
-│
-├── main.py                  # Point d'entrée CLI
-├── pyproject.toml           # Config build + outils
-├── install.sh               # Installation auto
-├── run.sh                   # Lancement
-├── DOCUMENTATION.md         # Guide complet
-├── INSTALLATION.md          # Guide d'install détaillé
-├── CONTRIBUTING.md          # Guide de contribution
-├── ROADMAP.md               # Roadmap projet
-├── CHANGELOG.md             # Historique versions
-├── SECURITY.md              # Politique sécurité
-├── CODE_OF_CONDUCT.md       # Code de conduite
-├── TERMS_OF_USE.md          # Conditions d'utilisation
-├── DISCLAIMER.md            # Avertissement légal
-└── LICENSE                  # MIT
 🧩 Créer un plugin
 FOKARAT dispose d'un SDK pour ajouter des modules facilement.
 
-python
-# plugins/mon_plugin.py
-from sdk import PluginBase, PluginMetadata
-
-class MonPlugin(PluginBase):
-    @property
-    def metadata(self):
-        return PluginMetadata(
-            name="Mon Plugin",
-            version="1.0.0",
-            author="Votre Nom",
-            description="Description du plugin",
-            category="misc",
-            tags=["demo"],
-        )
-
-    def run(self, config, args=None):
-        print("Hello from my plugin!")
-        return {"status": "success"}
 Le plugin est automatiquement détecté au prochain lancement de FOKARAT.
 
 📖 Guide complet : CONTRIBUTING.md
