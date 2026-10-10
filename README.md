@@ -237,10 +237,6 @@ Lwano Amissi Blanchard (FOKAS)
 
 📍 Bukavu, RDC 🇨🇩
 
-https://img.shields.io/badge/Email-amissilwano5@gmail.com-red?style=for-the-badge&logo=gmail
-https://img.shields.io/badge/GitHub-amissilwano5--beep-black?style=for-the-badge&logo=github
-https://img.shields.io/badge/WhatsApp-Cha%C3%AEne-25D366?style=for-the-badge&logo=whatsapp
-
 ⭐ Si FOKARAT vous aide, laissez une étoile sur GitHub !
 
 FOKAS — Building the future, one tool at a time.
