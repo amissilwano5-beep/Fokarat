@@ -1,5 +1,6 @@
 """
-FOKARAT - Authentification JWT pour l'API
+FOKARAT - Authentification JWT
+Utilise PyJWT si disponible, sinon fallback HMAC-SHA256.
 """
 import os
 import hmac
@@ -13,13 +14,8 @@ from fastapi import HTTPException, Header
 
 
 class JWTManager:
-    """
-    Gestionnaire de tokens JWT (HMAC-SHA256).
-    Utilise PyJWT si disponible, sinon fallback maison.
-    """
-
     SECRET_FILE = "output/.jwt_secret"
-    DEFAULT_EXPIRY = 3600  # 1h
+    DEFAULT_EXPIRY = 3600
 
     def __init__(self):
         self._secret = self._load_or_create_secret()
@@ -53,24 +49,21 @@ class JWTManager:
             "iat": int(time.time()),
             "exp": int(time.time()) + expiry,
         }
-
         if self._backend == "pyjwt":
             import jwt
             return jwt.encode(payload, self._secret, algorithm="HS256")
-
-        # Fallback : implémentation maison
+        # Fallback HMAC
         header = {"alg": "HS256", "typ": "JWT"}
         h_b64 = self._b64url(json.dumps(header, separators=(",", ":")).encode())
         p_b64 = self._b64url(json.dumps(payload, separators=(",", ":")).encode())
-        signature = self._sign(f"{h_b64}.{p_b64}")
-        return f"{h_b64}.{p_b64}.{signature}"
+        sig = self._sign(f"{h_b64}.{p_b64}")
+        return f"{h_b64}.{p_b64}.{sig}"
 
     def verify_token(self, token: str) -> dict:
         try:
             if self._backend == "pyjwt":
                 import jwt
                 return jwt.decode(token, self._secret, algorithms=["HS256"])
-            # Fallback
             parts = token.split(".")
             if len(parts) != 3:
                 raise ValueError("Token invalide")
@@ -86,8 +79,7 @@ class JWTManager:
             raise HTTPException(status_code=401, detail=f"Token invalide : {e}")
 
     def _sign(self, data: str) -> str:
-        sig = hmac.new(self._secret, data.encode(), hashlib.sha256).digest()
-        return self._b64url(sig)
+        return self._b64url(hmac.new(self._secret, data.encode(), hashlib.sha256).digest())
 
     def _b64url(self, data: bytes) -> str:
         return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
@@ -101,18 +93,15 @@ jwt_manager = JWTManager()
 
 
 def require_auth(authorization: str = Header(default=None)):
-    """
-    Dépendance FastAPI : vérifie le header Authorization: Bearer <token>.
-    Si FOKARAT_API_AUTH=0, désactive l'auth (mode dev).
-    """
+    """Dépendance FastAPI : Authorization: Bearer <token>."""
     if os.environ.get("FOKARAT_API_AUTH", "1") == "0":
-        return {"sub": "anonymous", "dev_mode": True}
-
+        raise HTTPException(
+            status_code=500,
+            detail="Mode dev désactivé. Définissez FOKARAT_API_USER/PASS.",
+        )
     if not authorization:
         raise HTTPException(status_code=401, detail="Authorization header manquant")
-
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
         raise HTTPException(status_code=401, detail="Format : Bearer <token>")
-
     return jwt_manager.verify_token(parts[1])

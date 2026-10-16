@@ -2,17 +2,24 @@
 -r requirements.txt
 
 # Tests
-pytest==7.4.4
-pytest-cov==4.1.0
-pytest-mock==3.12.0
+pytest>=7.4.4
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+httpx>=0.26.0
 
 # Qualité de code
-ruff==0.1.14
-black==24.1.1
-mypy==1.8.0
-pre-commit==3.6.0
-bandit==1.7.7
+ruff>=0.1.14
+black>=24.1.1
+mypy>=1.8.0
+pre-commit>=3.6.0
+bandit>=1.7.7
+types-PyYAML
+types-requests
 
 # Sécurité
-pip-audit==2.7.0
-safety==3.0.0
+pip-audit>=2.7.0
+safety>=3.0.0
+
+# Build
+build>=1.0.3
+pyinstaller>=6.3.0

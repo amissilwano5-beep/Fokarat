@@ -1,49 +1,80 @@
 """
 Plugin : Scanner de ports TCP
-Démontre un plugin utile avec scope obligatoire.
+Non-interactif — utilise args pour les paramètres.
+Le scope est vérifié automatiquement par PluginBase.
 """
 import socket
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from sdk import PluginBase, PluginMetadata
 
 
 class PortScannerPlugin(PluginBase):
-    """Scanner de ports TCP simple."""
+    """Scanner de ports TCP multithread avec vérification de scope."""
+
+    DEFAULT_PORTS = [21, 22, 23, 25, 53, 80, 110, 135, 139, 143, 443, 445,
+                     993, 995, 1433, 1521, 3306, 3389, 5432, 5900, 6379,
+                     8080, 8443, 27017]
 
     @property
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="Port Scanner",
-            version="1.0.0",
+            version="2.0.0",
             author="FOKAS",
-            description="Scanne les ports TCP ouverts sur une cible.",
+            description="Scan TCP multithread (non-interactif, scope requis).",
             category="attack",
             tags=["scan", "recon", "tcp"],
             requires_scope=True,
+            target_param="target",
         )
 
-    def run(self, config, args=None) -> dict:
-        target = input("  [>] Cible (IP) : ").strip()
+    def _execute(self, config, args=None) -> dict:
+        # Extrait les paramètres (pas de input() !)
+        if not args or not isinstance(args, dict):
+            return {"status": "error", "message": "args requis (dict)"}
+
+        target = args.get("target")
+        ports_input = args.get("ports", "top")
+        timeout = float(args.get("timeout", 0.5))
+        threads = int(args.get("threads", 100))
+
         if not target:
-            return {"status": "error", "message": "Cible vide"}
+            return {"status": "error", "message": "target manquant"}
 
-        ports_input = input("  [>] Ports (ex: 22,80,443 ou 1-1024) [1-1024] : ").strip()
-        if not ports_input:
-            ports_input = "1-1024"
+        # Parse les ports
+        if ports_input == "top":
+            ports = self.DEFAULT_PORTS
+        elif isinstance(ports_input, str):
+            ports = self._parse_ports(ports_input)
+        elif isinstance(ports_input, list):
+            ports = [int(p) for p in ports_input if 1 <= int(p) <= 65535]
+        else:
+            return {"status": "error", "message": "ports invalide"}
 
-        ports = self._parse_ports(ports_input)
         if not ports:
-            return {"status": "error", "message": "Ports invalides"}
+            return {"status": "error", "message": "aucun port valide"}
 
-        print(f"\n  Scan de {target} sur {len(ports)} ports...\n")
+        # Scan multithread
         opened = []
+        with ThreadPoolExecutor(max_workers=threads) as ex:
+            futures = {ex.submit(self._check_port, target, p, timeout): p for p in ports}
+            for fut in as_completed(futures):
+                port = futures[fut]
+                try:
+                    if fut.result():
+                        opened.append(port)
+                except Exception:
+                    pass
 
-        for port in ports:
-            if self._check_port(target, port, timeout=0.5):
-                print(f"  {C.GRN if False else ''}[+] Port {port} ouvert")
-                opened.append(port)
+        opened.sort()
 
-        print(f"\n  {len(opened)} port(s) ouvert(s) sur {len(ports)} testés")
-        return {"status": "success", "opened_ports": opened}
+        return {
+            "status": "success",
+            "target": target,
+            "scanned": len(ports),
+            "opened_ports": opened,
+            "opened_count": len(opened),
+        }
 
     def _parse_ports(self, spec: str) -> list:
         ports = []
@@ -59,12 +90,11 @@ class PortScannerPlugin(PluginBase):
                 ports.append(int(part))
         return [p for p in ports if 1 <= p <= 65535]
 
-    def _check_port(self, host: str, port: int, timeout: float = 1.0) -> bool:
+    def _check_port(self, host: str, port: int, timeout: float) -> bool:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
         try:
-            result = sock.connect_ex((host, port))
-            return result == 0
+            return sock.connect_ex((host, port)) == 0
         except Exception:
             return False
         finally:
