@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fokarat"
-version = "3.5.0"
+version = "4.0.0"
 description = "Framework de cybersécurité éducatif et modulaire"
 readme = "README.md"
 license = { text = "MIT" }

